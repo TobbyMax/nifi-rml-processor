@@ -29,14 +29,41 @@ class RMLMapperEngineTest {
         Path mapping = copyFixture("/fixtures/mappings/customers.rml.ttl",
             tempDir.resolve("customers.rml.ttl"));
 
+        runEngineAndAssertIsomorphic(
+            inputData, mapping, InputFormat.JSON, "/fixtures/expected/customers.ttl");
+    }
+
+    @Test
+    void executesCsvMappingAndProducesIsomorphicTurtle() throws Exception {
+        Path inputData = copyFixture("/fixtures/data/customers.csv", tempDir.resolve("customers.csv"));
+        Path mapping = copyFixture("/fixtures/mappings/customers.csv.rml.ttl",
+            tempDir.resolve("customers.csv.rml.ttl"));
+
+        runEngineAndAssertIsomorphic(
+            inputData, mapping, InputFormat.CSV, "/fixtures/expected/customers.ttl");
+    }
+
+    @Test
+    void executesXmlMappingAndProducesIsomorphicTurtle() throws Exception {
+        Path inputData = copyFixture("/fixtures/data/customers.xml", tempDir.resolve("customers.xml"));
+        Path mapping = copyFixture("/fixtures/mappings/customers.xml.rml.ttl",
+            tempDir.resolve("customers.xml.rml.ttl"));
+
+        runEngineAndAssertIsomorphic(
+            inputData, mapping, InputFormat.XML, "/fixtures/expected/customers_xml.ttl");
+    }
+
+    private void runEngineAndAssertIsomorphic(Path inputData, Path mapping,
+                                              InputFormat format, String expectedResource)
+            throws Exception {
         MappingRequest request = MappingRequest.builder()
             .inputData(inputData)
             .inputSizeBytes(Files.size(inputData))
-            .inputFormat(InputFormat.JSON)
+            .inputFormat(format)
             .mappingDocument(mapping)
             .outputFormat(OutputFormat.TURTLE)
             .baseIri("http://example.org/")
-            .workingDirectory(tempDir.resolve("work"))
+            .workingDirectory(tempDir.resolve("work-" + format.name().toLowerCase()))
             .build();
 
         RMLMapperEngine engine = new RMLMapperEngine();
@@ -50,12 +77,11 @@ class RMLMapperEngineTest {
         RDFParser.source(result.output().toUri().toString()).lang(Lang.TURTLE).parse(actual);
 
         Model expected = ModelFactory.createDefaultModel();
-        try (InputStream expectedStream = getClass().getResourceAsStream("/fixtures/expected/customers.ttl")) {
+        try (InputStream expectedStream = getClass().getResourceAsStream(expectedResource)) {
             RDFParser.source(expectedStream).lang(Lang.TURTLE).parse(expected);
         }
-
         assertThat(actual.isIsomorphicWith(expected))
-            .as("Generated RDF should be isomorphic to expected fixture")
+            .as("Generated RDF should be isomorphic to %s", expectedResource)
             .isTrue();
     }
 

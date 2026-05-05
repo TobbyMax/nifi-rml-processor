@@ -1,10 +1,19 @@
 package com.agreev.nifi.rml;
 
+import com.agreev.nifi.rml.engine.EngineSelection;
 import com.agreev.nifi.rml.engine.EngineSelectionStrategy;
 import com.agreev.nifi.rml.engine.MorphKGCEngine;
+import com.agreev.nifi.rml.engine.RMLEngine;
+import com.agreev.nifi.rml.engine.RMLEngineException;
 import com.agreev.nifi.rml.engine.RMLEngineRegistry;
 import com.agreev.nifi.rml.engine.RMLMapperEngine;
 import com.agreev.nifi.rml.model.EngineMode;
+import com.agreev.nifi.rml.model.InputFormat;
+import com.agreev.nifi.rml.model.MappingRequest;
+import com.agreev.nifi.rml.model.MappingResult;
+import com.agreev.nifi.rml.model.OutputFormat;
+import com.agreev.nifi.rml.util.TempFiles;
+import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
@@ -23,8 +32,16 @@ import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Tags({"rml", "rdf", "mapping", "semantic", "knowledge graph", "linked data"})
@@ -222,6 +239,102 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
 
     @Override
     public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-        throw new ProcessException("ExecuteRMLMappingProcessor onTrigger pending implementation");
+        FlowFile original = session.get();
+        if (original == null) {
+            return;
+        }
+
+        Path workDir = Paths.get(context.getProperty(TEMPORARY_DIRECTORY).getValue());
+        TempFiles.ensureDir(workDir);
+
+        Path inputCopy = TempFiles.createTempFile(workDir, "rml-in-", ".bin");
+        Path mappingCopy = TempFiles.createTempFile(workDir, "rml-map-", ".ttl");
+
+        try {
+            try (InputStream in = session.read(original)) {
+                Files.copy(in, inputCopy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            String mappingContent = readMapping(context, original);
+            Files.writeString(mappingCopy, mappingContent, StandardCharsets.UTF_8);
+
+            EngineMode mode = EngineMode.fromString(context.getProperty(ENGINE_MODE).getValue());
+            long threshold = context.getProperty(AUTO_THRESHOLD_BYTES).asLong();
+            long inputSize = original.getSize();
+            EngineSelection selection = selectionStrategy.select(mode, inputSize, threshold);
+
+            MappingRequest request = MappingRequest.builder()
+                .inputData(inputCopy)
+                .inputSizeBytes(inputSize)
+                .inputFormat(InputFormat.fromString(context.getProperty(INPUT_DATA_FORMAT).getValue()))
+                .mappingDocument(mappingCopy)
+                .outputFormat(OutputFormat.fromString(context.getProperty(OUTPUT_RDF_FORMAT).getValue()))
+                .baseIri(context.getProperty(BASE_IRI).getValue())
+                .workingDirectory(workDir)
+                .build();
+
+            RMLEngine engine = selection.engine();
+            MappingResult result = engine.execute(request);
+
+            FlowFile output = session.create(original);
+            output = session.importFrom(result.output(), output);
+
+            Map<String, String> attrs = new HashMap<>();
+            attrs.put("rml.engine.selected", result.engineId());
+            attrs.put("rml.engine.reason", selection.reason().name());
+            attrs.put("rml.input.size.bytes", Long.toString(inputSize));
+            attrs.put("rml.output.format", result.outputFormat().name());
+            attrs.put("rml.triples.count", Long.toString(result.triplesCount()));
+            attrs.put("rml.duration.ms", Long.toString(result.durationMillis()));
+            attrs.put("mime.type", result.outputFormat().mimeType());
+            output = session.putAllAttributes(output, attrs);
+
+            session.transfer(output, REL_SUCCESS);
+            session.transfer(original, REL_ORIGINAL);
+
+            TempFiles.deleteSilently(result.output());
+
+        } catch (RMLEngineException e) {
+            getLogger().error("RML engine execution failed: {}", new Object[]{e.getMessage()}, e);
+            FlowFile failed = session.putAttribute(original, "rml.error.message", e.getMessage());
+            failed = session.putAttribute(failed, "rml.error.type", e.getClass().getSimpleName());
+            session.transfer(failed, REL_FAILURE);
+        } catch (IOException e) {
+            getLogger().error("I/O failure in RML processor: {}", new Object[]{e.getMessage()}, e);
+            FlowFile failed = session.putAttribute(original, "rml.error.message", e.getMessage());
+            failed = session.putAttribute(failed, "rml.error.type", e.getClass().getSimpleName());
+            session.transfer(failed, REL_FAILURE);
+        } catch (RuntimeException e) {
+            getLogger().error("Unexpected failure in RML processor: {}", new Object[]{e.getMessage()}, e);
+            FlowFile failed = session.putAttribute(original, "rml.error.message", e.getMessage());
+            failed = session.putAttribute(failed, "rml.error.type", e.getClass().getSimpleName());
+            session.transfer(failed, REL_FAILURE);
+        } finally {
+            TempFiles.deleteSilently(inputCopy);
+            TempFiles.deleteSilently(mappingCopy);
+        }
+    }
+
+    private String readMapping(ProcessContext context, FlowFile flowFile) throws IOException {
+        String source = context.getProperty(MAPPING_SOURCE).getValue();
+        if (MAPPING_SOURCE_INLINE.getValue().equals(source)) {
+            return context.getProperty(MAPPING_CONTENT)
+                .evaluateAttributeExpressions(flowFile)
+                .getValue();
+        }
+        if (MAPPING_SOURCE_FILE.getValue().equals(source)) {
+            String pathValue = context.getProperty(MAPPING_FILE)
+                .evaluateAttributeExpressions(flowFile)
+                .getValue();
+            return Files.readString(Paths.get(pathValue), StandardCharsets.UTF_8);
+        }
+        if (MAPPING_SOURCE_ATTRIBUTE.getValue().equals(source)) {
+            String attrName = context.getProperty(MAPPING_ATTRIBUTE).getValue();
+            String value = flowFile.getAttribute(attrName);
+            if (value == null || value.isBlank()) {
+                throw new IOException("Mapping attribute '" + attrName + "' is missing or empty");
+            }
+            return value;
+        }
+        throw new IOException("Unknown mapping source: " + source);
     }
 }

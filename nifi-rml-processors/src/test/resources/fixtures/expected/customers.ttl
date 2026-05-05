@@ -1,0 +1,10 @@
+@prefix schema: <https://schema.org/> .
+@prefix ex:     <http://example.org/customer/> .
+
+ex:1 a schema:Person ;
+     schema:name "Иванов И.И." ;
+     schema:email "ivanov@example.com" .
+
+ex:2 a schema:Person ;
+     schema:name "Петров П.П." ;
+     schema:email "petrov@example.com" .

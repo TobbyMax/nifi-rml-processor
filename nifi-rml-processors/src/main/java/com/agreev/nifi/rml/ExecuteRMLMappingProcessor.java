@@ -314,7 +314,7 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
         }
     }
 
-    private String readMapping(ProcessContext context, FlowFile flowFile) throws IOException {
+    protected String readMapping(ProcessContext context, FlowFile flowFile) throws IOException {
         String source = context.getProperty(MAPPING_SOURCE).getValue();
         if (MAPPING_SOURCE_INLINE.getValue().equals(source)) {
             return context.getProperty(MAPPING_CONTENT)

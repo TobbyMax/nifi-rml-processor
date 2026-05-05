@@ -15,19 +15,16 @@ plugins {
     base
 }
 
-val processorsProject = project(":nifi-rml-processors")
-
 val bundledDependencies: Configuration by configurations.creating {
     isCanBeConsumed = false
     isCanBeResolved = true
 }
 
 dependencies {
-    bundledDependencies(processorsProject)
-    bundledDependencies(processorsProject) {
-        targetConfiguration = "runtimeElements"
-    }
+    bundledDependencies(project(":nifi-rml-processors"))
 }
+
+val processorsProject = project(":nifi-rml-processors")
 
 val narFileName = "${rootProject.name}-${project.version}.nar"
 

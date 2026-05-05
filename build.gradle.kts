@@ -40,7 +40,6 @@ subprojects {
 
 extra["nifiVersion"] = "2.8.0"
 extra["jenaVersion"] = "5.2.0"
-extra["carmlVersion"] = "1.4.0"
 extra["snakeyamlVersion"] = "2.3"
 extra["junitVersion"] = "5.10.2"
 extra["assertjVersion"] = "3.26.3"

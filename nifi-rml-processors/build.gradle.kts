@@ -1,6 +1,5 @@
 val nifiVersion: String by rootProject.extra
 val jenaVersion: String by rootProject.extra
-val carmlVersion: String by rootProject.extra
 val snakeyamlVersion: String by rootProject.extra
 val junitVersion: String by rootProject.extra
 val assertjVersion: String by rootProject.extra
@@ -10,21 +9,14 @@ dependencies {
     // NiFi processor SPI — provided by the runtime, not bundled into the NAR.
     compileOnly("org.apache.nifi:nifi-api:$nifiVersion")
     compileOnly("org.apache.nifi:nifi-utils:$nifiVersion")
-    compileOnly("org.apache.nifi:nifi-mock:$nifiVersion")
 
-    // RML in-process engine: CARML — Maven Central, Apache 2.0.
-    // CARML name is preserved internally; engine id() exposed to operators is "RMLMAPPER"
-    // (covers both reference RMLMapper and CARML semantics for the user).
-    implementation("io.carml:carml-engine:$carmlVersion")
-    implementation("io.carml:carml-model:$carmlVersion")
-    implementation("io.carml:carml-logical-source-resolver-jsonpath:$carmlVersion")
-    implementation("io.carml:carml-logical-source-resolver-csv:$carmlVersion")
-    implementation("io.carml:carml-logical-source-resolver-xpath:$carmlVersion")
-
-    // Apache Jena for RDF format conversion and isomorphism checks.
+    // Apache Jena — RDF model, Turtle parser, format conversion, isomorphism.
     implementation("org.apache.jena:jena-arq:$jenaVersion")
 
-    // YAML parser for the YARRRML translator (basic subset).
+    // JSONPath evaluator for RML JSON sources (ql:JSONPath).
+    implementation("com.jayway.jsonpath:json-path:2.9.0")
+
+    // YAML parser for the YARRRML translator.
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 
     // Tests

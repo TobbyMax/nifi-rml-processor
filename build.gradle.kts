@@ -1,19 +1,47 @@
 plugins {
-    id("java")
+    java
 }
 
-group = "org.example"
-version = "1.0-SNAPSHOT"
+allprojects {
+    group = "com.agreev.nifi"
+    version = "1.0.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
+    repositories {
+        mavenCentral()
+        maven {
+            name = "Eclipse RDF4J snapshots"
+            url = uri("https://repo.eclipse.org/content/repositories/rdf4j-snapshots/")
+        }
+    }
 }
 
-dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+subprojects {
+    apply(plugin = "java")
+
+    extensions.configure<JavaPluginExtension> {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        }
+    }
+
+    tasks.withType<JavaCompile>().configureEach {
+        options.encoding = "UTF-8"
+        options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing"))
+    }
+
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            showStandardStreams = false
+        }
+    }
 }
 
-tasks.test {
-    useJUnitPlatform()
-}
+extra["nifiVersion"] = "2.8.0"
+extra["jenaVersion"] = "5.2.0"
+extra["carmlVersion"] = "1.4.0"
+extra["snakeyamlVersion"] = "2.3"
+extra["junitVersion"] = "5.10.2"
+extra["assertjVersion"] = "3.26.3"
+extra["mockitoVersion"] = "5.14.2"

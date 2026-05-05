@@ -1,9 +1,11 @@
 package com.agreev.nifi.rml.engine;
 
+import com.agreev.nifi.rml.engine.rml.CsvRecordSource;
 import com.agreev.nifi.rml.engine.rml.JsonRecordSource;
 import com.agreev.nifi.rml.engine.rml.RMLMapping;
 import com.agreev.nifi.rml.engine.rml.RMLMappingParser;
 import com.agreev.nifi.rml.engine.rml.RecordMaterializer;
+import com.agreev.nifi.rml.engine.rml.XmlRecordSource;
 import com.agreev.nifi.rml.model.MappingRequest;
 import com.agreev.nifi.rml.model.MappingResult;
 import com.agreev.nifi.rml.util.RDFFormatConverters;
@@ -71,10 +73,8 @@ public final class RMLMapperEngine implements RMLEngine {
                                        RecordMaterializer materializer) throws RMLEngineException {
         switch (tm.referenceFormulation()) {
             case JSONPATH -> materializeJson(tm, request, materializer);
-            case CSV, XPATH ->
-                throw new RMLEngineException(
-                    "Reference formulation " + tm.referenceFormulation()
-                        + " is not supported in this engine version (JSON only)");
+            case CSV      -> materializeCsv(tm, request, materializer);
+            case XPATH    -> materializeXml(tm, request, materializer);
         }
     }
 
@@ -88,6 +88,32 @@ public final class RMLMapperEngine implements RMLEngine {
             }
         } catch (IOException e) {
             throw new RMLEngineException("Failed to read JSON input: " + request.inputData(), e);
+        }
+    }
+
+    private void materializeCsv(RMLMapping.TriplesMap tm,
+                                MappingRequest request,
+                                RecordMaterializer materializer) throws RMLEngineException {
+        try {
+            CsvRecordSource source = new CsvRecordSource(request.inputData());
+            for (var record : source) {
+                materializer.materialize(tm, record);
+            }
+        } catch (IOException e) {
+            throw new RMLEngineException("Failed to read CSV input: " + request.inputData(), e);
+        }
+    }
+
+    private void materializeXml(RMLMapping.TriplesMap tm,
+                                MappingRequest request,
+                                RecordMaterializer materializer) throws RMLEngineException {
+        try {
+            XmlRecordSource source = new XmlRecordSource(request.inputData(), tm.iterator());
+            for (var record : source) {
+                materializer.materialize(tm, record);
+            }
+        } catch (IOException e) {
+            throw new RMLEngineException("Failed to read XML input: " + request.inputData(), e);
         }
     }
 

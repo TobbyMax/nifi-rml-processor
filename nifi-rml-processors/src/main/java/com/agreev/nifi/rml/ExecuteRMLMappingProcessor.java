@@ -109,9 +109,9 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
     static final PropertyDescriptor INPUT_DATA_FORMAT = new PropertyDescriptor.Builder()
         .name("input-data-format")
         .displayName("Input data format")
-        .description("Format of the FlowFile content (this build supports JSON only)")
+        .description("Format of the FlowFile content")
         .required(true)
-        .allowableValues("JSON")
+        .allowableValues("JSON", "CSV", "XML")
         .defaultValue("JSON")
         .build();
 

@@ -1,0 +1,64 @@
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Project-specific ###
+# Курсовая: репозиторий хранит только код и README. Все исследовательские
+# документы (план, главы, библиография, методика, бенчмарки) живут на диске
+# рядом с кодом, но не попадают в git — это решение зафиксировано пользователем.
+*.md
+!README.md
+
+# Артефакты прежних сессий планирования
+claude_plan_*.md
+
+# Сборочные артефакты NAR-bundle и генерируемые датасеты бенчмарков
+**/nifi-rml-nar/build/
+evaluation/datasets/*.json
+evaluation/datasets/*.csv
+evaluation/datasets/*.xml
+evaluation/results/*.csv
+evaluation/results/*.json
+
+# Локальные настройки NiFi для отладки (Docker volumes)
+.nifi-runtime/
+*.nar.unpacked/
+
+# Временные файлы движков RML
+/tmp-rml/

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<invoices>
+  <invoice id="INV-2026-001">
+    <customer>
+      <id>1</id>
+      <name>Ivanov I.I.</name>
+    </customer>
+    <amount currency="RUB">125000.00</amount>
+    <issued>2026-04-15</issued>
+  </invoice>
+  <invoice id="INV-2026-002">
+    <customer>
+      <id>2</id>
+      <name>Petrov P.P.</name>
+    </customer>
+    <amount currency="RUB">89500.50</amount>
+    <issued>2026-04-22</issued>
+  </invoice>
+</invoices>

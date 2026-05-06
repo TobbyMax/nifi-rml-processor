@@ -12,6 +12,7 @@ import com.agreev.nifi.rml.model.InputFormat;
 import com.agreev.nifi.rml.model.MappingRequest;
 import com.agreev.nifi.rml.model.MappingResult;
 import com.agreev.nifi.rml.model.OutputFormat;
+import com.agreev.nifi.rml.repository.MappingRepository;
 import com.agreev.nifi.rml.util.TempFiles;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.annotation.behavior.InputRequirement;
@@ -38,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,13 +70,18 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
         "FILE", "File", "RML mapping is read from the filesystem");
     static final AllowableValue MAPPING_SOURCE_ATTRIBUTE = new AllowableValue(
         "ATTRIBUTE", "FlowFile attribute", "RML mapping is read from a FlowFile attribute");
+    static final AllowableValue MAPPING_SOURCE_URL = new AllowableValue(
+        "URL", "URL / repository",
+        "RML mapping is fetched from an HTTP(S) URL, file://, or classpath: URI. "
+            + "Supports raw GitHub/GitLab files, S3 presigned URLs, internal Git mirrors via HTTP.");
 
     static final PropertyDescriptor MAPPING_SOURCE = new PropertyDescriptor.Builder()
         .name("mapping-source")
         .displayName("Mapping source")
         .description("Where to read the RML mapping document from")
         .required(true)
-        .allowableValues(MAPPING_SOURCE_INLINE, MAPPING_SOURCE_FILE, MAPPING_SOURCE_ATTRIBUTE)
+        .allowableValues(MAPPING_SOURCE_INLINE, MAPPING_SOURCE_FILE,
+            MAPPING_SOURCE_ATTRIBUTE, MAPPING_SOURCE_URL)
         .defaultValue(MAPPING_SOURCE_INLINE.getValue())
         .build();
 
@@ -104,6 +111,27 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
         .required(false)
         .defaultValue("rml.mapping")
         .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+        .build();
+
+    static final PropertyDescriptor MAPPING_URL = new PropertyDescriptor.Builder()
+        .name("mapping-url")
+        .displayName("Mapping URL")
+        .description("URL of the mapping document. Supports http(s)://, file://, classpath: schemes. "
+            + "Expression Language is evaluated, so per-tenant or per-flow templating is possible "
+            + "(e.g. http://mappings.internal/${tenant.id}/customer.ttl).")
+        .required(false)
+        .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+        .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+        .build();
+
+    static final PropertyDescriptor MAPPING_CACHE_TTL_SECONDS = new PropertyDescriptor.Builder()
+        .name("mapping-cache-ttl-seconds")
+        .displayName("Mapping URL cache TTL (seconds)")
+        .description("How long to cache mappings fetched from URL before refetching. "
+            + "Set to 0 to disable caching.")
+        .required(true)
+        .addValidator(StandardValidators.LONG_VALIDATOR)
+        .defaultValue("600")
         .build();
 
     static final PropertyDescriptor INPUT_DATA_FORMAT = new PropertyDescriptor.Builder()
@@ -196,6 +224,7 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
 
     private static final List<PropertyDescriptor> PROPERTIES = List.of(
         MAPPING_SOURCE, MAPPING_CONTENT, MAPPING_FILE, MAPPING_ATTRIBUTE,
+        MAPPING_URL, MAPPING_CACHE_TTL_SECONDS,
         INPUT_DATA_FORMAT, OUTPUT_RDF_FORMAT,
         ENGINE_MODE, AUTO_THRESHOLD_BYTES, MORPH_KGC_COMMAND, MORPH_KGC_FALLBACK,
         BASE_IRI, TEMPORARY_DIRECTORY
@@ -206,6 +235,7 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
 
     protected RMLEngineRegistry registry;
     protected EngineSelectionStrategy selectionStrategy;
+    protected MappingRepository mappingRepository;
 
     @Override
     public Set<Relationship> getRelationships() {
@@ -226,6 +256,12 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
             300_000L));
         EngineMode fallback = EngineMode.fromString(context.getProperty(MORPH_KGC_FALLBACK).getValue());
         selectionStrategy = new EngineSelectionStrategy(registry, fallback);
+
+        Path tempDir = Paths.get(context.getProperty(TEMPORARY_DIRECTORY).getValue());
+        long ttlSeconds = context.getProperty(MAPPING_CACHE_TTL_SECONDS).asLong();
+        mappingRepository = new MappingRepository(
+            tempDir.resolve("mapping-cache"),
+            Duration.ofSeconds(ttlSeconds));
     }
 
     @OnStopped
@@ -235,6 +271,10 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
             registry = null;
         }
         selectionStrategy = null;
+        if (mappingRepository != null) {
+            mappingRepository.clearCache();
+            mappingRepository = null;
+        }
     }
 
     @Override
@@ -334,6 +374,15 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
                 throw new IOException("Mapping attribute '" + attrName + "' is missing or empty");
             }
             return value;
+        }
+        if (MAPPING_SOURCE_URL.getValue().equals(source)) {
+            String url = context.getProperty(MAPPING_URL)
+                .evaluateAttributeExpressions(flowFile)
+                .getValue();
+            if (url == null || url.isBlank()) {
+                throw new IOException("Mapping URL is empty");
+            }
+            return mappingRepository.fetch(url);
         }
         throw new IOException("Unknown mapping source: " + source);
     }

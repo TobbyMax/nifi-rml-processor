@@ -12,53 +12,75 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
-public final class CsvRecordSource implements Iterable<RecordView> {
+public final class CsvRecordSource implements Iterable<RecordView>, AutoCloseable {
 
+    private final BufferedReader reader;
     private final List<String> header;
-    private final List<List<String>> rows;
 
     public CsvRecordSource(Path inputPath) throws IOException {
-        try (InputStream in = Files.newInputStream(inputPath)) {
-            this.rows = new ArrayList<>();
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                String headerLine = r.readLine();
-                if (headerLine == null) {
-                    throw new IOException("Empty CSV input: " + inputPath);
-                }
-                this.header = parseRow(headerLine);
-                String line;
-                while ((line = r.readLine()) != null) {
-                    if (line.isEmpty()) {
-                        continue;
-                    }
-                    rows.add(parseRow(line));
-                }
-            }
+        InputStream in = Files.newInputStream(inputPath);
+        this.reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+        String headerLine = reader.readLine();
+        if (headerLine == null) {
+            reader.close();
+            throw new IOException("Empty CSV input: " + inputPath);
         }
-    }
-
-    public int size() {
-        return rows.size();
+        this.header = parseRow(headerLine);
     }
 
     @Override
     public Iterator<RecordView> iterator() {
-        return new Iterator<>() {
-            private int idx = 0;
+        return new LazyIterator();
+    }
 
-            @Override public boolean hasNext() { return idx < rows.size(); }
+    @Override
+    public void close() throws IOException {
+        reader.close();
+    }
 
-            @Override
-            public RecordView next() {
-                List<String> row = rows.get(idx++);
-                Map<String, String> map = new HashMap<>(header.size());
-                for (int i = 0; i < header.size(); i++) {
-                    map.put(header.get(i), i < row.size() ? row.get(i) : null);
-                }
-                return key -> map.get(key);
+    private final class LazyIterator implements Iterator<RecordView> {
+        private String pendingLine;
+        private boolean exhausted;
+
+        @Override
+        public boolean hasNext() {
+            if (exhausted) {
+                return false;
             }
-        };
+            if (pendingLine != null) {
+                return true;
+            }
+            try {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isEmpty()) {
+                        pendingLine = line;
+                        return true;
+                    }
+                }
+                exhausted = true;
+                return false;
+            } catch (IOException e) {
+                exhausted = true;
+                throw new IllegalStateException("CSV read failed", e);
+            }
+        }
+
+        @Override
+        public RecordView next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            List<String> row = parseRow(pendingLine);
+            pendingLine = null;
+            Map<String, String> map = new HashMap<>(header.size());
+            for (int i = 0; i < header.size(); i++) {
+                map.put(header.get(i), i < row.size() ? row.get(i) : null);
+            }
+            return map::get;
+        }
     }
 
     /**

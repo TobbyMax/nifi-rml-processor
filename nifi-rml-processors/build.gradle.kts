@@ -16,6 +16,10 @@ dependencies {
     // JSONPath evaluator for RML JSON sources (ql:JSONPath).
     implementation("com.jayway.jsonpath:json-path:2.9.0")
 
+    // Jackson streaming for record-by-record JSON parsing on the hot path.
+    implementation("com.fasterxml.jackson.core:jackson-core:2.17.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
+
     // YAML parser for the YARRRML translator.
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 

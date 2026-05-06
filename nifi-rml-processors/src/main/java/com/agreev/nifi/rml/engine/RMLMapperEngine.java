@@ -88,8 +88,7 @@ public final class RMLMapperEngine implements RMLEngine {
     private void materializeJson(RMLMapping.TriplesMap tm,
                                  MappingRequest request,
                                  RecordMaterializer materializer) throws RMLEngineException {
-        try {
-            JsonRecordSource source = new JsonRecordSource(request.inputData(), tm.iterator());
+        try (JsonRecordSource source = new JsonRecordSource(request.inputData(), tm.iterator())) {
             for (var record : source) {
                 materializer.materialize(tm, record);
             }
@@ -101,8 +100,7 @@ public final class RMLMapperEngine implements RMLEngine {
     private void materializeCsv(RMLMapping.TriplesMap tm,
                                 MappingRequest request,
                                 RecordMaterializer materializer) throws RMLEngineException {
-        try {
-            CsvRecordSource source = new CsvRecordSource(request.inputData());
+        try (CsvRecordSource source = new CsvRecordSource(request.inputData())) {
             for (var record : source) {
                 materializer.materialize(tm, record);
             }

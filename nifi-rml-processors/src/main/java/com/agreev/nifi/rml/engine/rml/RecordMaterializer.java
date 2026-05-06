@@ -4,11 +4,14 @@ import com.agreev.nifi.rml.engine.rml.RMLMapping.ObjectMap;
 import com.agreev.nifi.rml.engine.rml.RMLMapping.PredicateObjectMap;
 import com.agreev.nifi.rml.engine.rml.RMLMapping.SubjectMap;
 import com.agreev.nifi.rml.engine.rml.RMLMapping.TriplesMap;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.Resource;
+import org.apache.jena.datatypes.RDFDatatype;
+import org.apache.jena.datatypes.TypeMapper;
+import org.apache.jena.graph.Node;
+import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.graph.Triple;
+import org.apache.jena.riot.system.StreamRDF;
 import org.apache.jena.vocabulary.RDF;
 
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,10 +19,15 @@ public final class RecordMaterializer {
 
     private static final Pattern TEMPLATE_VAR = Pattern.compile("\\{([^}]+)\\}");
 
-    private final Model model;
+    private final StreamRDF stream;
+    private long tripleCount;
 
-    public RecordMaterializer(Model model) {
-        this.model = model;
+    public RecordMaterializer(StreamRDF stream) {
+        this.stream = stream;
+    }
+
+    public long tripleCount() {
+        return tripleCount;
     }
 
     public void materialize(TriplesMap tm, RecordView record) {
@@ -28,10 +36,10 @@ public final class RecordMaterializer {
         if (subjectIri == null) {
             return;
         }
-        Resource subject = model.createResource(subjectIri);
+        Node subject = NodeFactory.createURI(subjectIri);
 
         for (String classIri : sm.classIris()) {
-            subject.addProperty(RDF.type, model.createResource(classIri));
+            emit(subject, RDF.type.asNode(), NodeFactory.createURI(classIri));
         }
 
         for (PredicateObjectMap po : tm.predicateObjectMaps()) {
@@ -56,21 +64,29 @@ public final class RecordMaterializer {
                 continue;
             }
 
-            Resource predicate = model.createResource(po.predicateIri());
-            if (asResource) {
-                subject.addProperty(model.createProperty(po.predicateIri()),
-                    model.createResource(objectValue));
-            } else if (om.datatypeIri() != null) {
-                subject.addLiteral(model.createProperty(po.predicateIri()),
-                    model.createTypedLiteral(objectValue,
-                        org.apache.jena.datatypes.TypeMapper.getInstance().getSafeTypeByName(om.datatypeIri())));
-            } else if (om.languageTag() != null) {
-                subject.addProperty(model.createProperty(po.predicateIri()),
-                    objectValue, om.languageTag());
-            } else {
-                subject.addProperty(model.createProperty(po.predicateIri()), objectValue);
-            }
+            Node predicate = NodeFactory.createURI(po.predicateIri());
+            Node object = buildObjectNode(objectValue, asResource, om);
+            emit(subject, predicate, object);
         }
+    }
+
+    private Node buildObjectNode(String value, boolean asResource, ObjectMap om) {
+        if (asResource) {
+            return NodeFactory.createURI(value);
+        }
+        if (om.datatypeIri() != null) {
+            RDFDatatype dt = TypeMapper.getInstance().getSafeTypeByName(om.datatypeIri());
+            return NodeFactory.createLiteralByValue(value, dt);
+        }
+        if (om.languageTag() != null) {
+            return NodeFactory.createLiteralLang(value, om.languageTag());
+        }
+        return NodeFactory.createLiteralString(value);
+    }
+
+    private void emit(Node subject, Node predicate, Node object) {
+        stream.triple(Triple.create(subject, predicate, object));
+        tripleCount++;
     }
 
     public static String expandTemplate(String template, RecordView record) {

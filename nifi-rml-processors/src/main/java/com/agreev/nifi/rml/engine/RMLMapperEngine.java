@@ -8,11 +8,13 @@ import com.agreev.nifi.rml.engine.rml.RecordMaterializer;
 import com.agreev.nifi.rml.engine.rml.XmlRecordSource;
 import com.agreev.nifi.rml.model.MappingRequest;
 import com.agreev.nifi.rml.model.MappingResult;
-import com.agreev.nifi.rml.util.RDFFormatConverters;
+import com.agreev.nifi.rml.model.OutputFormat;
 import com.agreev.nifi.rml.util.TempFiles;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
+import org.apache.jena.riot.RDFFormat;
+import org.apache.jena.riot.system.StreamRDF;
+import org.apache.jena.riot.system.StreamRDFWriter;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -40,29 +42,34 @@ public final class RMLMapperEngine implements RMLEngine {
         Path workDir = TempFiles.ensureDir(request.workingDirectory());
         Path output = TempFiles.createTempFile(workDir, "rml-out-", outputSuffix(request));
 
-        try {
-            RMLMapping mapping = parser.parse(request.mappingDocument());
-            Model model = ModelFactory.createDefaultModel();
-            RecordMaterializer materializer = new RecordMaterializer(model);
+        RMLMapping mapping = parser.parse(request.mappingDocument());
+
+        try (OutputStream raw = Files.newOutputStream(output);
+             OutputStream buffered = new BufferedOutputStream(raw)) {
+
+            StreamRDF stream = StreamRDFWriter.getWriterStream(buffered, streamingFormat(request.outputFormat()));
+            RecordMaterializer materializer = new RecordMaterializer(stream);
+            stream.start();
 
             for (RMLMapping.TriplesMap tm : mapping.triplesMaps()) {
                 materializeTriplesMap(tm, request, materializer);
             }
 
-            try (OutputStream os = Files.newOutputStream(output)) {
-                RDFFormatConverters.write(model, os, request.outputFormat());
-            }
+            stream.finish();
+            buffered.flush();
 
             return MappingResult.builder()
                 .output(output)
                 .outputFormat(request.outputFormat())
                 .durationMillis(System.currentTimeMillis() - start)
-                .triplesCount(model.size())
+                .triplesCount(materializer.tripleCount())
                 .engineId(ID)
                 .build();
 
         } catch (RMLEngineException e) {
             throw e;
+        } catch (IOException e) {
+            throw new RMLEngineException("RMLMapper engine I/O failure: " + e.getMessage(), e);
         } catch (Exception e) {
             throw new RMLEngineException("RMLMapper engine failed: " + e.getMessage(), e);
         }
@@ -115,6 +122,15 @@ public final class RMLMapperEngine implements RMLEngine {
         } catch (IOException e) {
             throw new RMLEngineException("Failed to read XML input: " + request.inputData(), e);
         }
+    }
+
+    private static RDFFormat streamingFormat(OutputFormat format) {
+        return switch (format) {
+            case TURTLE   -> RDFFormat.TURTLE_BLOCKS;
+            case NTRIPLES -> RDFFormat.NTRIPLES_UTF8;
+            case JSONLD   -> RDFFormat.JSONLD_FLAT;
+            case RDFXML   -> RDFFormat.RDFXML_PLAIN;
+        };
     }
 
     private static String outputSuffix(MappingRequest request) {

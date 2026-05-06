@@ -1,0 +1,63 @@
+{
+  "name": "AUTO engine routing demo",
+  "description": "Demonstrates AUTO mode: small FlowFiles route to RMLMapper, large FlowFiles route to Morph-KGC. Uses RouteOnAttribute downstream to split traces.",
+  "processGroupName": "rml-auto-demo",
+  "processors": [
+    {
+      "id": "get",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile mixed-sizes/",
+      "properties": {
+        "Input Directory": "/tmp/nifi-rml-bench",
+        "File Filter": ".*\\.json",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "ExecuteRMLMappingProcessor (AUTO)",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-url": "http://mappings.internal/${tenant.id}/customers.ttl",
+        "mapping-cache-ttl-seconds": "300",
+        "input-data-format": "JSON",
+        "output-rdf-format": "NTRIPLES",
+        "engine-mode": "AUTO",
+        "auto-threshold-bytes": "5242880",
+        "morph-kgc-command": "morph-kgc",
+        "morph-kgc-fallback": "RMLMAPPER",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      }
+    },
+    {
+      "id": "route",
+      "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+      "name": "RouteOnAttribute by engine",
+      "properties": {
+        "Routing Strategy": "Route to Property name",
+        "rmlmapper": "${rml.engine.selected:equals('RMLMAPPER')}",
+        "morph-kgc": "${rml.engine.selected:equals('MORPH_KGC')}"
+      }
+    },
+    {
+      "id": "put_small",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile rml/",
+      "properties": { "Directory": "/tmp/nifi-rml-out/rmlmapper" }
+    },
+    {
+      "id": "put_large",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile morph/",
+      "properties": { "Directory": "/tmp/nifi-rml-out/morph-kgc" }
+    }
+  ],
+  "connections": [
+    { "from": "get",   "fromRel": "success",   "to": "rml" },
+    { "from": "rml",   "fromRel": "success",   "to": "route" },
+    { "from": "route", "fromRel": "rmlmapper", "to": "put_small" },
+    { "from": "route", "fromRel": "morph-kgc", "to": "put_large" }
+  ]
+}

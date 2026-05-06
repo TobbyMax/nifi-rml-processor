@@ -1,0 +1,51 @@
+{
+  "name": "JSON to RDF (RMLMapper)",
+  "description": "Generates a JSON FlowFile, runs ExecuteRMLMappingProcessor in RMLMAPPER mode, writes Turtle to disk.",
+  "processGroupName": "rml-json-demo",
+  "processors": [
+    {
+      "id": "generate",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "name": "GenerateFlowFile customers.json",
+      "properties": {
+        "Custom Text": "[{\"id\":1,\"name\":\"Ivanov I.I.\"},{\"id\":2,\"name\":\"Petrov P.P.\"}]",
+        "Data Format": "Text",
+        "File Size": "0B",
+        "Batch Size": "1",
+        "Unique FlowFiles": "false",
+        "MIME Type": "application/json"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "ExecuteRMLMappingProcessor",
+      "properties": {
+        "mapping-source": "INLINE",
+        "mapping-content": "@prefix rr: <http://www.w3.org/ns/r2rml#> . @prefix rml: <http://semweb.mmlab.be/ns/rml#> . @prefix ql: <http://semweb.mmlab.be/ns/ql#> . @prefix schema: <https://schema.org/> . <#M> rml:logicalSource [ rml:source 'in.json' ; rml:referenceFormulation ql:JSONPath ; rml:iterator '$[*]' ] ; rr:subjectMap [ rr:template 'http://example.org/c/{id}' ; rr:class schema:Person ] ; rr:predicateObjectMap [ rr:predicate schema:name ; rr:objectMap [ rml:reference 'name' ] ] .",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "auto-threshold-bytes": "52428800",
+        "morph-kgc-command": "morph-kgc",
+        "morph-kgc-fallback": "RMLMAPPER",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      }
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      }
+    }
+  ],
+  "connections": [
+    { "from": "generate", "fromRel": "success", "to": "rml" },
+    { "from": "rml", "fromRel": "success", "to": "put" }
+  ]
+}

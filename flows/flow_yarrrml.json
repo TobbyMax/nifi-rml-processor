@@ -1,0 +1,43 @@
+{
+  "name": "YARRRML mapping demo",
+  "description": "Inline YARRRML mapping is transpiled to RML on each FlowFile and executed.",
+  "processGroupName": "rml-yarrrml-demo",
+  "processors": [
+    {
+      "id": "generate",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "name": "GenerateFlowFile customers.json",
+      "properties": {
+        "Custom Text": "[{\"id\":1,\"name\":\"Ivanov\"},{\"id\":2,\"name\":\"Petrov\"}]",
+        "Data Format": "Text",
+        "MIME Type": "application/json"
+      }
+    },
+    {
+      "id": "yarrrml",
+      "type": "com.agreev.nifi.rml.ExecuteYARRRMLMappingProcessor",
+      "name": "ExecuteYARRRMLMappingProcessor",
+      "properties": {
+        "mapping-source": "INLINE",
+        "mapping-content": "prefixes:\n  schema: \"https://schema.org/\"\n  ex: \"http://example.org/c/\"\nsources:\n  customers:\n    access: in.json\n    referenceFormulation: jsonpath\n    iterator: \"$[*]\"\nmappings:\n  customer:\n    sources: [ customers ]\n    s: ex:$(id)\n    po:\n      - [ a, schema:Person ]\n      - [ schema:name, $(name) ]\n",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      }
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out"
+      }
+    }
+  ],
+  "connections": [
+    { "from": "generate", "fromRel": "success", "to": "yarrrml" },
+    { "from": "yarrrml", "fromRel": "success", "to": "put" }
+  ]
+}

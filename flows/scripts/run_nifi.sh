@@ -26,9 +26,9 @@ case "${1:-start}" in
       -e NIFI_WEB_HTTP_PORT=8080 \
       -e SINGLE_USER_CREDENTIALS_USERNAME=admin \
       -e SINGLE_USER_CREDENTIALS_PASSWORD=ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB \
-      -v "$REPO/nifi-rml-nar/build/libs:/opt/nifi/nifi-current/extensions:ro" \
+      -v "$REPO/nifi-rml-nar/build/libs:/opt/nifi/nifi-current/nar_extensions" \
       -v "$REPO/docs/examples/mappings:/opt/nifi/mappings:ro" \
-      -v "$REPO/docs/examples/data:/tmp/nifi-rml-in:ro" \
+      -v "$REPO/docs/examples/data:/tmp/nifi-rml-in" \
       -v "/tmp/nifi-rml-out:/tmp/nifi-rml-out" \
       "$IMAGE"
     echo "NiFi starting at http://localhost:8080/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"

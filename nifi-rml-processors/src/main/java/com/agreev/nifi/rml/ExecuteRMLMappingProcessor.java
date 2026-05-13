@@ -316,7 +316,9 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
             MappingResult result = engine.execute(request);
 
             FlowFile output = session.create(original);
-            output = session.importFrom(result.output(), output);
+            try (InputStream rdfIn = Files.newInputStream(result.output())) {
+                output = session.importFrom(rdfIn, output);
+            }
 
             Map<String, String> attrs = new HashMap<>();
             attrs.put("rml.engine.selected", result.engineId());

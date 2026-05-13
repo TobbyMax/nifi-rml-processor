@@ -31,16 +31,17 @@ public final class JsonRecordSource implements Iterable<RecordView>, AutoCloseab
 
     public JsonRecordSource(Path inputPath, String iterator) throws IOException {
         if (isStreamingIterator(iterator)) {
-            this.streamingParser = STREAM_FACTORY.createParser(Files.newInputStream(inputPath));
-            JsonToken first = streamingParser.nextToken();
+            JsonParser parser = STREAM_FACTORY.createParser(Files.newInputStream(inputPath));
+            JsonToken first = parser.nextToken();
             if (first == JsonToken.START_ARRAY) {
+                this.streamingParser = parser;
                 this.streaming = true;
                 this.bufferedRecords = null;
                 return;
             }
             // Non-array root with a streaming-shaped iterator: read once eagerly via tree.
-            JsonNode root = streamingParser.readValueAsTree();
-            streamingParser.close();
+            JsonNode root = parser.readValueAsTree();
+            parser.close();
             this.streamingParser = null;
             this.streaming = false;
             this.bufferedRecords = Collections.singletonList(STREAM_MAPPER.convertValue(root, Object.class));

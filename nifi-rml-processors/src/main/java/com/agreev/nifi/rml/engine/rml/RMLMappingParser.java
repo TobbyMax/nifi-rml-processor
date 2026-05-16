@@ -32,6 +32,13 @@ public final class RMLMappingParser {
     public static final String QL_NS  = "http://semweb.mmlab.be/ns/ql#";
 
     public RMLMapping parse(Path turtleFile) throws RMLEngineException {
+        System.err.printf("RMLMappingParser: Parsing mapping from file: %s%n", turtleFile.toAbsolutePath());
+        if (!Files.exists(turtleFile)) {
+            throw new RMLEngineException("Mapping file does not exist: " + turtleFile.toAbsolutePath());
+        }
+        if (!Files.isReadable(turtleFile)) {
+            throw new RMLEngineException("Mapping file is not readable: " + turtleFile.toAbsolutePath());
+        }
         try (InputStream in = Files.newInputStream(turtleFile)) {
             return parse(in);
         } catch (Exception e) {
@@ -40,9 +47,11 @@ public final class RMLMappingParser {
     }
 
     public RMLMapping parse(InputStream turtleStream) throws RMLEngineException {
+        System.err.println("RMLMappingParser: Parsing mapping from stream");
         Model model = ModelFactory.createDefaultModel();
         try {
             RDFParser.source(turtleStream).lang(Lang.TURTLE).parse(model);
+            System.err.printf("RMLMappingParser: Parsed Turtle model with %d statements%n", model.size());
         } catch (Exception e) {
             throw new RMLEngineException("Failed to parse mapping document as Turtle", e);
         }
@@ -53,13 +62,17 @@ public final class RMLMappingParser {
         Property logicalSource = model.createProperty(RML_NS + "logicalSource");
         ResIterator triplesMapResources = model.listSubjectsWithProperty(logicalSource);
         List<TriplesMap> triplesMaps = new ArrayList<>();
+        int count = 0;
         while (triplesMapResources.hasNext()) {
             Resource tm = triplesMapResources.nextResource();
+            count++;
+            System.err.printf("RMLMappingParser: Parsing TriplesMap #%d: %s%n", count, tm.getURI());
             triplesMaps.add(parseTriplesMap(model, tm));
         }
         if (triplesMaps.isEmpty()) {
             throw new RMLEngineException("No TriplesMap with rml:logicalSource found in mapping");
         }
+        System.err.printf("RMLMappingParser: Successfully parsed %d triple maps%n", triplesMaps.size());
         return new RMLMapping(triplesMaps);
     }
 
@@ -72,6 +85,10 @@ public final class RMLMappingParser {
             getResource(logicalSource, model.createProperty(RML_NS + "referenceFormulation")));
         String iterator = getString(logicalSource, model.createProperty(RML_NS + "iterator"));
 
+        System.err.printf("RMLMappingParser:   source=%s%n", sourcePath);
+        System.err.printf("RMLMappingParser:   referenceFormulation=%s%n", refForm);
+        System.err.printf("RMLMappingParser:   iterator=%s%n", iterator);
+
         Resource subjectMapResource = mustGetResource(tm, model.createProperty(RR_NS + "subjectMap"),
             "rr:subjectMap");
         String template = mustGetString(subjectMapResource, model.createProperty(RR_NS + "template"),
@@ -83,16 +100,22 @@ public final class RMLMappingParser {
             classIris.add(classes.next().asResource().getURI());
         }
         SubjectMap subjectMap = new SubjectMap(template, classIris);
+        System.err.printf("RMLMappingParser:   subjectMap.template=%s%n", template);
+        System.err.printf("RMLMappingParser:   subjectMap.classes=%s%n", classIris);
 
         List<PredicateObjectMap> predicateObjectMaps = new ArrayList<>();
         StmtIterator poStmts = model.listStatements(tm, model.createProperty(RR_NS + "predicateObjectMap"),
             (RDFNode) null);
+        int poCount = 0;
         while (poStmts.hasNext()) {
             Statement po = poStmts.nextStatement();
             Resource poResource = po.getObject().asResource();
+            poCount++;
+            System.err.printf("RMLMappingParser:   PredicateObjectMap #%d%n", poCount);
             predicateObjectMaps.add(parsePredicateObjectMap(model, poResource));
         }
 
+        System.err.printf("RMLMappingParser:   Total predicateObjectMaps=%d%n", predicateObjectMaps.size());
         return new TriplesMap(sourcePath, refForm, iterator, subjectMap, predicateObjectMaps);
     }
 

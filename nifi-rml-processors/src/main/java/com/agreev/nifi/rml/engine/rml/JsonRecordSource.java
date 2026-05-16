@@ -30,28 +30,46 @@ public final class JsonRecordSource implements Iterable<RecordView>, AutoCloseab
     private final boolean streaming;
 
     public JsonRecordSource(Path inputPath, String iterator) throws IOException {
-        if (isStreamingIterator(iterator)) {
-            JsonParser parser = STREAM_FACTORY.createParser(Files.newInputStream(inputPath));
-            JsonToken first = parser.nextToken();
-            if (first == JsonToken.START_ARRAY) {
-                this.streamingParser = parser;
-                this.streaming = true;
-                this.bufferedRecords = null;
+        if (!Files.exists(inputPath)) {
+            throw new IOException("Input JSON file does not exist: " + inputPath.toAbsolutePath());
+        }
+        if (!Files.isReadable(inputPath)) {
+            throw new IOException("Input JSON file is not readable: " + inputPath.toAbsolutePath());
+        }
+
+        try {
+            if (isStreamingIterator(iterator)) {
+                JsonParser parser = STREAM_FACTORY.createParser(Files.newInputStream(inputPath));
+                JsonToken first = parser.nextToken();
+                if (first == JsonToken.START_ARRAY) {
+                    this.streamingParser = parser;
+                    this.streaming = true;
+                    this.bufferedRecords = null;
+                    System.err.println("JSON record source: streaming mode, iterator=" + (iterator == null ? "$" : iterator));
+                    return;
+                }
+                System.err.println("JSON record source: non-array root detected, switching to eager mode");
+                JsonNode root = parser.readValueAsTree();
+                parser.close();
+                this.streamingParser = null;
+                this.streaming = false;
+                this.bufferedRecords = Collections.singletonList(STREAM_MAPPER.convertValue(root, Object.class));
                 return;
             }
-            // Non-array root with a streaming-shaped iterator: read once eagerly via tree.
-            JsonNode root = parser.readValueAsTree();
-            parser.close();
-            this.streamingParser = null;
+            try (InputStream in = Files.newInputStream(inputPath)) {
+                this.bufferedRecords = readEager(in, iterator);
+                System.err.printf("JSON record source: buffered mode, iterator=%s, records=%d%n",
+                    (iterator == null || iterator.isEmpty() ? "$" : iterator),
+                    this.bufferedRecords.size());
+            }
             this.streaming = false;
-            this.bufferedRecords = Collections.singletonList(STREAM_MAPPER.convertValue(root, Object.class));
-            return;
+            this.streamingParser = null;
+        } catch (IOException e) {
+            throw new IOException(
+                String.format("Failed to read JSON input %s with iterator '%s': %s",
+                    inputPath.toAbsolutePath(), (iterator == null ? "$" : iterator), e.getMessage()),
+                e);
         }
-        try (InputStream in = Files.newInputStream(inputPath)) {
-            this.bufferedRecords = readEager(in, iterator);
-        }
-        this.streaming = false;
-        this.streamingParser = null;
     }
 
     public JsonRecordSource(InputStream in, String iterator) throws IOException {
@@ -62,14 +80,31 @@ public final class JsonRecordSource implements Iterable<RecordView>, AutoCloseab
 
     @SuppressWarnings("unchecked")
     private static List<Object> readEager(InputStream in, String iterator) throws IOException {
-        ReadContext ctx = JsonPath.using(Configuration.defaultConfiguration()).parse(in);
-        Object result = ctx.read(iterator == null || iterator.isEmpty() ? "$" : iterator);
-        if (result instanceof List<?> list) {
-            return new ArrayList<>(list);
+        try {
+            String expr = iterator == null || iterator.isEmpty() ? "$" : iterator;
+            ReadContext ctx = JsonPath.using(Configuration.defaultConfiguration()).parse(in);
+            Object result = ctx.read(expr);
+
+            if (result == null) {
+                System.err.printf("Warning: JSONPath expression '%s' returned null%n", expr);
+                return Collections.emptyList();
+            }
+
+            if (result instanceof List<?> list) {
+                System.err.printf("JSONPath '%s' matched %d items%n", expr, list.size());
+                return new ArrayList<>(list);
+            }
+
+            System.err.printf("JSONPath '%s' returned single item of type %s%n", expr, result.getClass().getSimpleName());
+            List<Object> single = new ArrayList<>(1);
+            single.add(result);
+            return single;
+        } catch (Exception e) {
+            throw new IOException(
+                String.format("Failed to parse JSON with iterator '%s': %s",
+                    (iterator == null || iterator.isEmpty() ? "$" : iterator), e.getMessage()),
+                e);
         }
-        List<Object> single = new ArrayList<>(1);
-        single.add(result);
-        return single;
     }
 
     private static boolean isStreamingIterator(String iterator) {
@@ -166,17 +201,34 @@ public final class JsonRecordSource implements Iterable<RecordView>, AutoCloseab
         @Override
         public String get(String reference) {
             if (record == null) {
+                System.err.println("Warning: JSON record is null");
                 return null;
             }
-            if (reference.startsWith("$") || reference.contains(".") || reference.contains("[")) {
-                Object value = JsonPath.read(record, reference);
-                return value == null ? null : value.toString();
+            if (reference == null || reference.isEmpty()) {
+                System.err.println("Warning: Empty or null reference in JSON evaluation");
+                return null;
             }
-            if (record instanceof Map<?, ?> map) {
-                Object v = map.get(reference);
-                return v == null ? null : v.toString();
+
+            try {
+                if (reference.startsWith("$") || reference.contains(".") || reference.contains("[")) {
+                    Object value = JsonPath.read(record, reference);
+                    return value == null ? null : value.toString();
+                }
+                if (record instanceof Map<?, ?> map) {
+                    Object v = map.get(reference);
+                    if (v == null) {
+                        System.err.printf("Warning: Reference '%s' not found in JSON record. Available keys: %s%n",
+                            reference, map.keySet());
+                    }
+                    return v == null ? null : v.toString();
+                }
+                System.err.printf("Warning: Cannot evaluate reference '%s' on non-Map JSON record of type %s%n",
+                    reference, record.getClass().getSimpleName());
+                return null;
+            } catch (Exception e) {
+                System.err.printf("Error evaluating JSON reference '%s': %s%n", reference, e.getMessage());
+                return null;
             }
-            return null;
         }
     }
 }

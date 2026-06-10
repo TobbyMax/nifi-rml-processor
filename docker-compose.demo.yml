@@ -1,0 +1,161 @@
+# End-to-End demo stack for the thesis defense.
+# See docs/10_e2e_demo_architecture.md for the full design.
+#
+# Quick start (after building the NAR):
+#   ./gradlew :nifi-rml-nar:nar
+#   docker compose -f docker-compose.demo.yml up -d
+#   bash demo/bootstrap.sh
+#
+# UIs:
+#   NiFi      http://localhost:8080/nifi   (admin / Secrets4ChangeMeNow)
+#   Fuseki    http://localhost:3030        (admin / admin)
+#   Neo4j     http://localhost:7474        (neo4j / Secrets4ChangeMeNow)
+#   Superset  http://localhost:8089        (admin / admin)
+#
+# To enable the optional GraphRAG agent service:
+#   docker compose -f docker-compose.demo.yml --profile ai up -d
+
+services:
+  # -------------------------------------------------------------------
+  # Source: PostgreSQL 16 stands in for Greenplum on a single laptop.
+  # Operational e-commerce schema is created at startup.
+  # -------------------------------------------------------------------
+  greenplum:
+    image: postgres:16
+    container_name: rml-demo-greenplum
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: gpadmin
+      POSTGRES_PASSWORD: Secrets4ChangeMeNow
+    ports:
+      - "5432:5432"
+    volumes:
+      - greenplum-data:/var/lib/postgresql/data
+      - ./demo/greenplum-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gpadmin -d ecommerce"]
+      interval: 5s
+      retries: 20
+
+  # -------------------------------------------------------------------
+  # Mapping repository: serves RML/YARRRML files over HTTP under
+  # http://mapping-repo/<tenant>/<dataset>.rml.ttl. The ExecuteRMLMapping-
+  # Processor pulls them on demand using mapping-source = URL with
+  # NiFi Expression Language for ${tenant.id}.
+  # -------------------------------------------------------------------
+  mapping-repo:
+    image: nginx:1.27-alpine
+    container_name: rml-demo-mapping-repo
+    volumes:
+      - ./demo/mappings:/usr/share/nginx/html:ro
+    ports:
+      - "8088:80"
+
+  # -------------------------------------------------------------------
+  # Apache NiFi 2.8.0 with the locally built NAR mounted into extensions.
+  # -------------------------------------------------------------------
+  nifi:
+    image: apache/nifi:2.8.0
+    container_name: rml-demo-nifi
+    environment:
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      SINGLE_USER_CREDENTIALS_PASSWORD: Secrets4ChangeMeNow
+      NIFI_JVM_HEAP_INIT: 1g
+      NIFI_JVM_HEAP_MAX: 4g
+    volumes:
+      - ./nifi-rml-nar/build/libs:/opt/nifi/nifi-current/nar_extensions
+      - nifi-conf:/opt/nifi/nifi-current/conf
+      - nifi-content:/opt/nifi/nifi-current/content_repository
+      - nifi-prov:/opt/nifi/nifi-current/provenance_repository
+      - nifi-flowfile:/opt/nifi/nifi-current/flowfile_repository
+      - nifi-state:/opt/nifi/nifi-current/state
+    ports:
+      - "8443:8443"
+      - "8084:8084"
+    depends_on:
+      greenplum:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------
+  # Apache Jena Fuseki 5.x: SPARQL endpoint and RDF triplestore.
+  # Two datasets are created by demo/bootstrap.sh: tenant_acme and tenant_globex.
+  # -------------------------------------------------------------------
+  fuseki:
+    image: stain/jena-fuseki:5.0.0
+    container_name: rml-demo-fuseki
+    environment:
+      ADMIN_PASSWORD: admin
+      JVM_ARGS: -Xmx2g
+    ports:
+      - "3030:3030"
+    volumes:
+      - fuseki-data:/fuseki
+
+  # -------------------------------------------------------------------
+  # Neo4j 5 Community with APOC and neosemantics (n10s) for the
+  # property-graph branch of the pipeline.
+  # -------------------------------------------------------------------
+  neo4j:
+    image: neo4j:5-community
+    container_name: rml-demo-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/Secrets4ChangeMeNow
+      NEO4J_PLUGINS: '["apoc","n10s"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,n10s.*"
+      NEO4J_dbms_memory_heap_max__size: 1g
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+
+  # -------------------------------------------------------------------
+  # Apache Superset for the tabular BI branch.
+  # -------------------------------------------------------------------
+  superset:
+    image: apache/superset:4.0.2
+    container_name: rml-demo-superset
+    environment:
+      SUPERSET_SECRET_KEY: change-me-please-change-me-please
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin
+    ports:
+      - "8089:8088"
+    volumes:
+      - superset-home:/app/superset_home
+      - ./demo/superset/bootstrap.sh:/app/bootstrap.sh:ro
+    command: ["/bin/sh", "/app/bootstrap.sh"]
+    depends_on:
+      greenplum:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------
+  # Optional: GraphRAG agent (requires OPENAI_API_KEY in the host env).
+  # Start with: docker compose --profile ai up -d
+  # -------------------------------------------------------------------
+  graphrag-agent:
+    profiles: ["ai"]
+    build: ./demo/graphrag-agent
+    container_name: rml-demo-graphrag
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: Secrets4ChangeMeNow
+    ports:
+      - "8501:8501"
+    depends_on:
+      - neo4j
+
+volumes:
+  greenplum-data:
+  nifi-conf:
+  nifi-content:
+  nifi-prov:
+  nifi-flowfile:
+  nifi-state:
+  fuseki-data:
+  neo4j-data:
+  neo4j-logs:
+  superset-home:

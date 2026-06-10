@@ -31,7 +31,8 @@
         "morph-kgc-fallback": "RMLMAPPER",
         "base-iri": "http://example.org/",
         "temporary-directory": "/tmp/nifi-rml"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
     },
     {
       "id": "put",
@@ -41,7 +42,8 @@
         "Directory": "/tmp/nifi-rml-out",
         "Conflict Resolution Strategy": "replace",
         "Create Missing Directories": "true"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
     }
   ],
   "connections": [

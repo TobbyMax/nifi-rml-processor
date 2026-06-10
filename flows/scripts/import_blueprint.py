@@ -155,13 +155,17 @@ class NiFiClient:
         return pg_id
 
     def create_processor(self, group_id: str, blueprint: dict[str, Any], pos: dict) -> str:
+        config: dict[str, Any] = {"properties": blueprint["properties"]}
+        auto_term = blueprint.get("autoTerminatedRelationships")
+        if auto_term:
+            config["autoTerminatedRelationships"] = list(auto_term)
         payload = {
             "revision": {"version": 0},
             "component": {
                 "name": blueprint["name"],
                 "type": blueprint["type"],
                 "position": pos,
-                "config": {"properties": blueprint["properties"]},
+                "config": config,
             },
         }
         print(f"  Creating processor '{blueprint['name']}' in group {group_id}...", file=sys.stderr)

@@ -12,9 +12,10 @@ import com.agreev.nifi.rml.model.OutputFormat;
 import com.agreev.nifi.rml.util.TempFiles;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
+import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
-import org.apache.jena.riot.RDFWriter;
 import org.apache.jena.riot.system.StreamRDF;
+import org.apache.jena.riot.system.StreamRDFLib;
 import org.apache.jena.riot.system.StreamRDFWriter;
 
 import java.io.BufferedOutputStream;
@@ -60,13 +61,22 @@ public final class RMLMapperEngine implements RMLEngine {
         try (OutputStream raw = Files.newOutputStream(output);
              OutputStream buffered = new BufferedOutputStream(raw)) {
 
-            RDFFormat format = streamingFormat(request.outputFormat());
-            System.err.printf("RMLMapper: Creating StreamRDF writer for format: %s%n", format);
+            RDFFormat format = outputFormat(request.outputFormat());
+            boolean streamable = isStreamable(request.outputFormat());
+            System.err.printf("RMLMapper: Output format: %s (streamable=%s)%n", format, streamable);
 
-            StreamRDF stream = StreamRDFWriter.getWriterStream(buffered, format);
-            if (stream == null) {
-                throw new RMLEngineException(
-                    "Failed to create StreamRDF writer: StreamRDFWriter.getWriterStream returned null for format " + format);
+            Model capturedModel = streamable ? null : ModelFactory.createDefaultModel();
+            StreamRDF stream;
+            if (streamable) {
+                stream = StreamRDFWriter.getWriterStream(buffered, format);
+                if (stream == null) {
+                    throw new RMLEngineException(
+                        "Failed to create StreamRDF writer: StreamRDFWriter.getWriterStream returned null for format " + format);
+                }
+            } else {
+                // JSON-LD (and other non-streamable formats) must be serialized as a whole document;
+                // capture triples into an in-memory Model, write at the end.
+                stream = StreamRDFLib.graph(capturedModel.getGraph());
             }
 
             RecordMaterializer materializer = new RecordMaterializer(stream);
@@ -79,6 +89,11 @@ public final class RMLMapperEngine implements RMLEngine {
 
             System.err.println("RMLMapper: Finishing stream");
             stream.finish();
+            if (!streamable) {
+                System.err.printf("RMLMapper: Serializing in-memory model (%d triples) as %s%n",
+                    capturedModel.size(), format);
+                RDFDataMgr.write(buffered, capturedModel, format);
+            }
             buffered.flush();
 
             long durationMs = System.currentTimeMillis() - start;
@@ -170,13 +185,19 @@ public final class RMLMapperEngine implements RMLEngine {
         }
     }
 
-    private static RDFFormat streamingFormat(OutputFormat format) {
+    private static RDFFormat outputFormat(OutputFormat format) {
         return switch (format) {
             case TURTLE   -> RDFFormat.TURTLE_BLOCKS;
             case NTRIPLES -> RDFFormat.NTRIPLES_UTF8;
             case JSONLD   -> RDFFormat.JSONLD_FLAT;
             case RDFXML   -> RDFFormat.RDFXML_PLAIN;
         };
+    }
+
+    private static boolean isStreamable(OutputFormat format) {
+        // JSON-LD and RDF/XML require closed document structure (top-level object / rdf:RDF
+        // wrapper) and have no streaming writer in Jena; fall back to in-memory Model.
+        return format != OutputFormat.JSONLD && format != OutputFormat.RDFXML;
     }
 
     private static String outputSuffix(MappingRequest request) {

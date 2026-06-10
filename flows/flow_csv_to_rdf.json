@@ -26,7 +26,8 @@
         "engine-mode": "RMLMAPPER",
         "base-iri": "http://example.org/",
         "temporary-directory": "/tmp/nifi-rml"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
     },
     {
       "id": "put",
@@ -35,7 +36,8 @@
       "properties": {
         "Directory": "/tmp/nifi-rml-out",
         "Create Missing Directories": "true"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
     }
   ],
   "connections": [

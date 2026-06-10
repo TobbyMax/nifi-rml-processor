@@ -21,11 +21,12 @@
         "mapping-source": "URL",
         "mapping-url": "file:///opt/nifi/mappings/invoices.xml.rml.ttl",
         "input-data-format": "XML",
-        "output-rdf-format": "TURTLE",
+        "output-rdf-format": "RDFXML",
         "engine-mode": "RMLMAPPER",
         "base-iri": "http://example.org/",
         "temporary-directory": "/tmp/nifi-rml"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
     },
     {
       "id": "put",
@@ -34,7 +35,8 @@
       "properties": {
         "Directory": "/tmp/nifi-rml-out",
         "Create Missing Directories": "true"
-      }
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
     }
   ],
   "connections": [

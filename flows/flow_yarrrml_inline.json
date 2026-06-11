@@ -1,0 +1,47 @@
+{
+  "name": "YARRRML inline mapping demo",
+  "description": "Inline YARRRML mapping is transpiled to RML via mapping-format=YARRRML and executed.",
+  "processGroupName": "rml-yarrrml-inline-demo",
+  "processors": [
+    {
+      "id": "generate",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "name": "GenerateFlowFile customers.json",
+      "properties": {
+        "Custom Text": "[{\"id\":1,\"name\":\"Ivanov\",\"email\":\"ivanov@example.com\"},{\"id\":2,\"name\":\"Petrov\",\"email\":\"petrov@example.com\"}]",
+        "Data Format": "Text",
+        "MIME Type": "application/json"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "ExecuteRMLMappingProcessor (YARRRML)",
+      "properties": {
+        "mapping-source": "INLINE",
+        "mapping-format": "YARRRML",
+        "mapping-content": "prefixes:\n  ex:     \"http://example.org/customer/\"\n  schema: \"https://schema.org/\"\nsources:\n  customers:\n    access: customers.json\n    referenceFormulation: jsonpath\n    iterator: \"$[*]\"\nmappings:\n  customer:\n    sources: [ customers ]\n    s: ex:$(id)\n    po:\n      - [ a, schema:Person ]\n      - [ schema:name, $(name) ]\n      - [ schema:email, $(email) ]\n",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+  "connections": [
+    { "from": "generate", "fromRel": "success", "to": "rml" },
+    { "from": "rml", "fromRel": "success", "to": "put" }
+  ]
+}

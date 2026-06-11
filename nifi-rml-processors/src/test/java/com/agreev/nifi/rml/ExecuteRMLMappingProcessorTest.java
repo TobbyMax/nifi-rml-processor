@@ -89,6 +89,38 @@ class ExecuteRMLMappingProcessorTest {
         failed.assertAttributeExists("rml.error.type");
     }
 
+    @Test
+    void yarrrmlInlineMappingTranspilesAndExecutes() throws Exception {
+        runner.setProperty(ExecuteRMLMappingProcessor.MAPPING_FORMAT,
+            ExecuteRMLMappingProcessor.MAPPING_FORMAT_YARRRML.getValue());
+        runner.setProperty(ExecuteRMLMappingProcessor.MAPPING_CONTENT, loadResource("/fixtures/mappings/customers.yarrrml.yml"));
+
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("filename", "customers.json");
+        runner.enqueue(loadResource("/fixtures/data/customers.json").getBytes(StandardCharsets.UTF_8), attrs);
+        runner.run();
+
+        runner.assertTransferCount(ExecuteRMLMappingProcessor.REL_SUCCESS, 1);
+        runner.assertTransferCount(ExecuteRMLMappingProcessor.REL_ORIGINAL, 1);
+        runner.assertTransferCount(ExecuteRMLMappingProcessor.REL_FAILURE, 0);
+
+        MockFlowFile out = runner.getFlowFilesForRelationship(ExecuteRMLMappingProcessor.REL_SUCCESS).get(0);
+        out.assertAttributeEquals("rml.engine.selected", RMLMapperEngine.ID);
+        out.assertAttributeEquals("rml.output.format", "TURTLE");
+
+        String body = new String(runner.getContentAsByteArray(out), StandardCharsets.UTF_8);
+        Model actual = ModelFactory.createDefaultModel();
+        try (InputStream in = new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8))) {
+            RDFParser.source(in).lang(Lang.TURTLE).parse(actual);
+        }
+
+        Model expected = ModelFactory.createDefaultModel();
+        try (InputStream in = getClass().getResourceAsStream("/fixtures/expected/customers.ttl")) {
+            RDFParser.source(in).lang(Lang.TURTLE).parse(expected);
+        }
+        assertThat(actual.isIsomorphicWith(expected)).isTrue();
+    }
+
     private String loadResource(String path) throws Exception {
         try (InputStream in = getClass().getResourceAsStream(path)) {
             assertThat(in).as("Resource %s should exist", path).isNotNull();

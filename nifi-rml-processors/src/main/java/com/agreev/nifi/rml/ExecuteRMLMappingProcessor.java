@@ -14,6 +14,7 @@ import com.agreev.nifi.rml.model.MappingResult;
 import com.agreev.nifi.rml.model.OutputFormat;
 import com.agreev.nifi.rml.repository.MappingRepository;
 import com.agreev.nifi.rml.util.TempFiles;
+import com.agreev.nifi.rml.yarrrml.YARRRMLParser;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -75,6 +76,11 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
         "RML mapping is fetched from an HTTP(S) URL, file://, or classpath: URI. "
             + "Supports raw GitHub/GitLab files, S3 presigned URLs, internal Git mirrors via HTTP.");
 
+    static final AllowableValue MAPPING_FORMAT_RML_TTL = new AllowableValue(
+        "RML_TTL", "RML/Turtle", "Mapping is in RML (Turtle syntax)");
+    static final AllowableValue MAPPING_FORMAT_YARRRML = new AllowableValue(
+        "YARRRML", "YARRRML", "Mapping is in YARRRML (YAML) and will be transpiled to RML");
+
     static final PropertyDescriptor MAPPING_SOURCE = new PropertyDescriptor.Builder()
         .name("mapping-source")
         .displayName("Mapping source")
@@ -122,6 +128,16 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
         .required(false)
         .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
         .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+        .build();
+
+    static final PropertyDescriptor MAPPING_FORMAT = new PropertyDescriptor.Builder()
+        .name("mapping-format")
+        .displayName("Mapping format")
+        .description("Format of the mapping document. When YARRRML is selected, the processor transpiles "
+            + "the mapping to RML/Turtle before execution.")
+        .required(true)
+        .allowableValues(MAPPING_FORMAT_RML_TTL, MAPPING_FORMAT_YARRRML)
+        .defaultValue(MAPPING_FORMAT_RML_TTL.getValue())
         .build();
 
     static final PropertyDescriptor MAPPING_CACHE_TTL_SECONDS = new PropertyDescriptor.Builder()
@@ -224,7 +240,7 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
 
     private static final List<PropertyDescriptor> PROPERTIES = List.of(
         MAPPING_SOURCE, MAPPING_CONTENT, MAPPING_FILE, MAPPING_ATTRIBUTE,
-        MAPPING_URL, MAPPING_CACHE_TTL_SECONDS,
+        MAPPING_URL, MAPPING_FORMAT, MAPPING_CACHE_TTL_SECONDS,
         INPUT_DATA_FORMAT, OUTPUT_RDF_FORMAT,
         ENGINE_MODE, AUTO_THRESHOLD_BYTES, MORPH_KGC_COMMAND, MORPH_KGC_FALLBACK,
         BASE_IRI, TEMPORARY_DIRECTORY
@@ -236,6 +252,7 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
     protected RMLEngineRegistry registry;
     protected EngineSelectionStrategy selectionStrategy;
     protected MappingRepository mappingRepository;
+    private final YARRRMLParser yarrrmlParser = new YARRRMLParser();
 
     @Override
     public Set<Relationship> getRelationships() {
@@ -358,34 +375,39 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
 
     protected String readMapping(ProcessContext context, FlowFile flowFile) throws IOException {
         String source = context.getProperty(MAPPING_SOURCE).getValue();
+        String rawMapping;
         if (MAPPING_SOURCE_INLINE.getValue().equals(source)) {
-            return context.getProperty(MAPPING_CONTENT)
+            rawMapping = context.getProperty(MAPPING_CONTENT)
                 .evaluateAttributeExpressions(flowFile)
                 .getValue();
-        }
-        if (MAPPING_SOURCE_FILE.getValue().equals(source)) {
+        } else if (MAPPING_SOURCE_FILE.getValue().equals(source)) {
             String pathValue = context.getProperty(MAPPING_FILE)
                 .evaluateAttributeExpressions(flowFile)
                 .getValue();
-            return Files.readString(Paths.get(pathValue), StandardCharsets.UTF_8);
-        }
-        if (MAPPING_SOURCE_ATTRIBUTE.getValue().equals(source)) {
+            rawMapping = Files.readString(Paths.get(pathValue), StandardCharsets.UTF_8);
+        } else if (MAPPING_SOURCE_ATTRIBUTE.getValue().equals(source)) {
             String attrName = context.getProperty(MAPPING_ATTRIBUTE).getValue();
             String value = flowFile.getAttribute(attrName);
             if (value == null || value.isBlank()) {
                 throw new IOException("Mapping attribute '" + attrName + "' is missing or empty");
             }
-            return value;
-        }
-        if (MAPPING_SOURCE_URL.getValue().equals(source)) {
+            rawMapping = value;
+        } else if (MAPPING_SOURCE_URL.getValue().equals(source)) {
             String url = context.getProperty(MAPPING_URL)
                 .evaluateAttributeExpressions(flowFile)
                 .getValue();
             if (url == null || url.isBlank()) {
                 throw new IOException("Mapping URL is empty");
             }
-            return mappingRepository.fetch(url);
+            rawMapping = mappingRepository.fetch(url);
+        } else {
+            throw new IOException("Unknown mapping source: " + source);
         }
-        throw new IOException("Unknown mapping source: " + source);
+
+        String mappingFormat = context.getProperty(MAPPING_FORMAT).getValue();
+        if (MAPPING_FORMAT_YARRRML.getValue().equals(mappingFormat)) {
+            return yarrrmlParser.parse(rawMapping);
+        }
+        return rawMapping;
     }
 }

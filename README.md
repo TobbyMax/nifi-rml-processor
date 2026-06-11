@@ -20,7 +20,7 @@
   - `ATTRIBUTE` — FlowFile-атрибут;
   - `URL` — HTTP(S) / `file://` / `classpath:` URI с TTL-кешем; работает с raw-endpoint'ами GitHub/GitLab, S3, внутренними mapping-репозиториями.
 - **Параметризация**: NiFi Expression Language применяется к маппингам и URL — `${tenant.id}`, `${dataset}`, `${region}` подставляются из FlowFile-атрибутов.
-- **YARRRML**: отдельный процессор `ExecuteYARRRMLMappingProcessor` транспилирует YARRRML→RML встроенным Java-парсером (базовое подмножество спецификации).
+- **YARRRML**: встроенная транспиляция YARRRML→RML через свойство `mapping-format` в `ExecuteRMLMappingProcessor` (базовое подмножество спецификации, Java-парсер).
 - **Provenance**: на каждый FlowFile пишутся атрибуты `rml.engine.selected`, `rml.engine.reason`, `rml.triples.count`, `rml.duration.ms`, `rml.input.size.bytes`, `mime.type`, `rml.error.*`.
 
 ## Состав репозитория
@@ -93,7 +93,7 @@ ITERATIONS=5 NIFI_TOKEN="$TOKEN" bash evaluation/scripts/run_benchmarks.sh
 
 ## Ветки git
 
-- **`master`** — финальная версия с поддержкой JSON+CSV+XML, обоих движков (включая AUTO), URL-источника маппингов, потокового режима и YARRRML-процессора.
+- **`master`** — финальная версия с поддержкой JSON+CSV+XML, обоих движков (включая AUTO), URL-источника маппингов, потокового режима и YARRRML (через `mapping-format` в основном процессоре).
 - **`json-only-parser`** (тег `json-only-parser-complete`) — снимок после этапа 5: JSON-only процессор с обоими движками, без CSV/XML/YARRRML/URL/streaming. Сохранён для иллюстрации фазового подхода в главе 3 ВКР.
 
 ## Лицензия

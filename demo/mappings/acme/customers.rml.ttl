@@ -1,0 +1,49 @@
+@prefix rr:     <http://www.w3.org/ns/r2rml#> .
+@prefix rml:    <http://semweb.mmlab.be/ns/rml#> .
+@prefix ql:     <http://semweb.mmlab.be/ns/ql#> .
+@prefix schema: <https://schema.org/> .
+
+# Параметризованный маппинг.
+#
+# 1. Когда mapping-source = INLINE/FILE/URL, NiFi применяет Expression Language
+#    к содержимому маппинга при каждом FlowFile. Подстановки вида ${tenant.id}
+#    заменяются значениями из FlowFile-атрибутов.
+#
+# 2. Когда mapping-source = URL, можно держать каталог маппингов во внешнем
+#    репозитории — http(s) или Git mirror'е через raw-endpoint:
+#       http://mappings.internal/${tenant.id}/customer.ttl
+#       https://raw.githubusercontent.com/org/repo/main/mappings/customer.ttl
+#       file:///opt/nifi/mappings/customer.ttl
+#       classpath:fixtures/mappings/customer.ttl
+#    Процессор кэширует ответ на mapping-cache-ttl-seconds (default 600 c).
+#
+# 3. Variant: можно держать как сам маппинг URL-параметризованным
+#    (например, http://mappings.internal/${tenant.id}/${dataset}.ttl).
+#    Тогда один и тот же процессор обслуживает разных арендаторов.
+
+<#CustomerParameterizedMap>
+  rml:logicalSource [
+    rml:source              "${input.path}" ;
+    rml:referenceFormulation ql:JSONPath ;
+    rml:iterator            "${input.iterator:-$[*]}"
+  ] ;
+  rr:subjectMap [
+    rr:template "http://${tenant.id}.example.org/customer/{id}" ;
+    rr:class    schema:Person
+  ] ;
+  rr:predicateObjectMap [
+    rr:predicate schema:identifier ;
+    rr:objectMap [ rml:reference "id" ]
+  ] ;
+  rr:predicateObjectMap [
+    rr:predicate schema:name ;
+    rr:objectMap [ rml:reference "name" ]
+  ] ;
+  rr:predicateObjectMap [
+    rr:predicate schema:email ;
+    rr:objectMap [ rml:reference "email" ]
+  ] ;
+  rr:predicateObjectMap [
+    rr:predicate schema:provider ;
+    rr:objectMap [ rr:constant "${tenant.id}" ]
+  ] .

@@ -14,7 +14,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-NIFI_URL="${NIFI_URL:-http://localhost:8080/nifi-api}"
+NIFI_URL="${NIFI_URL:-https://localhost:8443/nifi-api}"
 NIFI_USER="${NIFI_USER:-admin}"
 NIFI_PASS="${NIFI_PASS:-Secrets4ChangeMeNow}"
 FUSEKI_URL="${FUSEKI_URL:-http://localhost:3030}"
@@ -42,7 +42,7 @@ require jq
 wait_http() {
     local url="$1" name="$2" tries=60
     while ((tries-- > 0)); do
-        if curl -fsS -o /dev/null --max-time 2 "${url}"; then
+        if curl -fsSk -o /dev/null --max-time 2 "${url}"; then
             log "${name} is up"
             return 0
         fi
@@ -52,30 +52,30 @@ wait_http() {
     return 1
 }
 
+wait_nifi() {
+    local tries=60
+    while ((tries-- > 0)); do
+        # Try to get access token - if successful, NiFi is ready
+        if curl -fsSk -o /dev/null --max-time 2 -X POST "${NIFI_URL}/access/token" \
+            -d "username=${NIFI_USER}&password=${NIFI_PASS}" 2>/dev/null; then
+            log "NiFi is up"
+            return 0
+        fi
+        sleep 2
+    done
+    log "NiFi did not become ready in time"
+    return 1
+}
+
 wait_http "${FUSEKI_URL}/$/ping" "Fuseki"
 wait_http "${NEO4J_URL}/" "Neo4j"
-wait_http "${NIFI_URL}/system-diagnostics" "NiFi"
+wait_nifi
 
 # ---------------------------------------------------------------
-# 2. Greenplum: load the full benchmark dataset (idempotent).
+# 2. Greenplum: data already seeded by 02_seed.sql at container init.
 # ---------------------------------------------------------------
-log "loading benchmark dataset into Greenplum (~1k customers / 10k orders)"
-python3 evaluation/scripts/generate_datasets.py --customers 1000 --orders 10000 \
-    --out "${REPO_ROOT}/evaluation/datasets" >/dev/null
-
-PGPASSWORD="${GP_PASS}" psql -h "${GP_HOST}" -U "${GP_USER}" -d "${GP_DB}" \
-    -v ON_ERROR_STOP=1 \
-    -c "TRUNCATE ops.order_items, ops.orders, ops.customers, ops.products RESTART IDENTITY CASCADE;" \
-    >/dev/null
-
-PGPASSWORD="${GP_PASS}" psql -h "${GP_HOST}" -U "${GP_USER}" -d "${GP_DB}" \
-    -c "\copy ops.customers FROM '${REPO_ROOT}/evaluation/datasets/customers.csv' WITH (FORMAT csv, HEADER true)"
-PGPASSWORD="${GP_PASS}" psql -h "${GP_HOST}" -U "${GP_USER}" -d "${GP_DB}" \
-    -c "\copy ops.products  FROM '${REPO_ROOT}/evaluation/datasets/products.csv'  WITH (FORMAT csv, HEADER true)"
-PGPASSWORD="${GP_PASS}" psql -h "${GP_HOST}" -U "${GP_USER}" -d "${GP_DB}" \
-    -c "\copy ops.orders    FROM '${REPO_ROOT}/evaluation/datasets/orders.csv'    WITH (FORMAT csv, HEADER true)"
-PGPASSWORD="${GP_PASS}" psql -h "${GP_HOST}" -U "${GP_USER}" -d "${GP_DB}" \
-    -c "\copy ops.order_items FROM '${REPO_ROOT}/evaluation/datasets/order_items.csv' WITH (FORMAT csv, HEADER true)"
+log "Greenplum data loaded by docker-entrypoint-initdb.d/02_seed.sql"
+# Data is pre-loaded via init SQL, no additional import needed
 
 # ---------------------------------------------------------------
 # 3. Mapping repository: ensure per-tenant trees exist.
@@ -118,7 +118,7 @@ cypher "CALL n10s.graphconfig.init({handleVocabUris:'IGNORE',handleMultival:'OVE
 # ---------------------------------------------------------------
 if [[ -f "flows/flow_e2e_demo.json" ]]; then
     log "importing flows/flow_e2e_demo.json into NiFi"
-    TOKEN=$(curl -fsS -X POST "${NIFI_URL}/access/token" \
+    TOKEN=$(curl -fsSk -X POST "${NIFI_URL}/access/token" \
         -d "username=${NIFI_USER}&password=${NIFI_PASS}")
     python3 flows/scripts/import_blueprint.py \
         --base-url "${NIFI_URL}" \

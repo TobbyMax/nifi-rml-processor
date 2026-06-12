@@ -216,7 +216,7 @@ def import_blueprint(blueprint_path: Path, client: NiFiClient) -> str:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("blueprints", nargs="+", help="Blueprint JSON file(s)")
-    parser.add_argument("--base-url", default="http://localhost:8080/nifi-api")
+    parser.add_argument("--base-url", default="https://localhost:8443/nifi-api")
     parser.add_argument("--token", default=None, help="Bearer token (NiFi access token)")
     parser.add_argument("--verify-ssl", action="store_true", help="Verify SSL certificates (default: disabled)")
     args = parser.parse_args(argv[1:])

@@ -40,16 +40,33 @@ def latest_provenance_event(base_url: str, token: str | None,
             }
         }
     }
-    resp = requests.post(f"{base_url}/provenance", json=payload,
-                         headers=headers, timeout=10)
-    resp.raise_for_status()
-    query_id = resp.json()["provenance"]["id"]
+    
+    # Retry on 409 Conflict (previous query still running)
+    query_id = None
+    deadline = time.time() + 30
+    while time.time() < deadline and query_id is None:
+        try:
+            resp = requests.post(f"{base_url}/provenance", json=payload,
+                                 headers=headers, timeout=10, verify=False)
+            if resp.status_code == 409:
+                time.sleep(2)
+                continue
+            resp.raise_for_status()
+            query_id = resp.json()["provenance"]["id"]
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 409:
+                time.sleep(2)
+                continue
+            raise
+    
+    if query_id is None:
+        return None
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         time.sleep(1.0)
         q = requests.get(f"{base_url}/provenance/{query_id}",
-                         headers=headers, timeout=10).json()
+                         headers=headers, timeout=10, verify=False).json()
         if q["provenance"]["finished"]:
             results = q["provenance"]["results"].get("provenanceEvents") or []
             return results[0] if results else None

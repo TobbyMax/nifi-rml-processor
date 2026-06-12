@@ -2,20 +2,22 @@ package com.agreev.nifi.rml.model;
 
 public enum OutputFormat {
 
-    TURTLE("text/turtle", "TURTLE"),
+    TURTLE("text/turtle", "TURTLE", "ttl"),
 
-    NTRIPLES("application/n-triples", "N-TRIPLES"),
+    NTRIPLES("application/n-triples", "N-TRIPLES", "nt"),
 
-    JSONLD("application/ld+json", "JSON-LD"),
+    JSONLD("application/ld+json", "JSON-LD", "jsonld"),
 
-    RDFXML("application/rdf+xml", "RDF/XML");
+    RDFXML("application/rdf+xml", "RDF/XML", "rdf");
 
     private final String mimeType;
     private final String jenaName;
+    private final String fileExtension;
 
-    OutputFormat(String mimeType, String jenaName) {
+    OutputFormat(String mimeType, String jenaName, String fileExtension) {
         this.mimeType = mimeType;
         this.jenaName = jenaName;
+        this.fileExtension = fileExtension;
     }
 
     public String mimeType() {
@@ -24,6 +26,10 @@ public enum OutputFormat {
 
     public String jenaName() {
         return jenaName;
+    }
+
+    public String fileExtension() {
+        return fileExtension;
     }
 
     public static OutputFormat fromString(String value) {

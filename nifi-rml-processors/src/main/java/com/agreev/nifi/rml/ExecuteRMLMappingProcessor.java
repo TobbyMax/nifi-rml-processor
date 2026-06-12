@@ -337,6 +337,14 @@ public class ExecuteRMLMappingProcessor extends AbstractProcessor {
                 output = session.importFrom(rdfIn, output);
             }
 
+            // Update filename with correct extension based on output format
+            String inputFilename = original.getAttribute("filename");
+            String baseName = inputFilename.contains(".") 
+                ? inputFilename.substring(0, inputFilename.lastIndexOf('.'))
+                : inputFilename;
+            String newFilename = baseName + "." + result.outputFormat().fileExtension();
+            output = session.putAttribute(output, "filename", newFilename);
+
             Map<String, String> attrs = new HashMap<>();
             attrs.put("rml.engine.selected", result.engineId());
             attrs.put("rml.engine.reason", selection.reason().name());

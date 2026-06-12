@@ -7,10 +7,11 @@
 #   flows/scripts/run_nifi.sh deploy    # copy NAR-bundle into the running container
 #
 # Mounts:
-#   $REPO/nifi-rml-nar/build/libs       -> /opt/nifi/nifi-current/extensions
-#   $REPO/docs/examples/mappings        -> /opt/nifi/mappings (read-only)
-#   $REPO/docs/examples/data            -> /tmp/nifi-rml-in   (read-only)
-#   /tmp/nifi-rml-out                    -> /tmp/nifi-rml-out  (read-write, host)
+#   $REPO/nifi-rml-nar/build/libs       -> /opt/nifi/nifi-current/nar_extensions
+#   $REPO/evaluation/mappings           -> /opt/nifi/mappings (read-only)
+#   $REPO/evaluation/datasets           -> /opt/nifi/datasets (read-only)
+#   /tmp/nifi-rml-bench                  -> /tmp/nifi-rml-bench  (read-write)
+#   /tmp/nifi-rml-out                    -> /tmp/nifi-rml-out    (read-write)
 
 set -euo pipefail
 
@@ -20,18 +21,23 @@ IMAGE="apache/nifi:2.8.0"
 
 case "${1:-start}" in
   start)
-    mkdir -p /tmp/nifi-rml-out
+    mkdir -p /tmp/nifi-rml-bench /tmp/nifi-rml-out
     docker run -d --name "$CONTAINER" \
       -p 8080:8080 -p 8443:8443 \
       -e NIFI_WEB_HTTP_PORT=8080 \
       -e SINGLE_USER_CREDENTIALS_USERNAME=admin \
       -e SINGLE_USER_CREDENTIALS_PASSWORD=ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB \
       -v "$REPO/nifi-rml-nar/build/libs:/opt/nifi/nifi-current/nar_extensions" \
-      -v "$REPO/docs/examples/mappings:/opt/nifi/mappings:ro" \
-      -v "$REPO/docs/examples/data:/tmp/nifi-rml-in" \
+      -v "$REPO/evaluation/mappings:/opt/nifi/mappings:ro" \
+      -v "$REPO/evaluation/datasets:/opt/nifi/datasets:ro" \
+      -v "/tmp/nifi-rml-bench:/tmp/nifi-rml-bench" \
       -v "/tmp/nifi-rml-out:/tmp/nifi-rml-out" \
       "$IMAGE"
     echo "NiFi starting at http://localhost:8080/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
+    echo "Mappings:  /opt/nifi/mappings (from evaluation/mappings)"
+    echo "Datasets:  /opt/nifi/datasets (from evaluation/datasets)"
+    echo "Watch dir: /tmp/nifi-rml-bench"
+    echo "Output:    /tmp/nifi-rml-out"
     ;;
 
   stop)

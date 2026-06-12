@@ -22,7 +22,7 @@
 #   ITERATIONS   default 5
 #   BASE_URL     default https://localhost:8443/nifi-api
 #   NIFI_TOKEN   bearer token, empty for unsecured NiFi
-#   SKIP_XML     default 1 (need evaluation/mappings/invoices.rml.ttl first)
+#   SKIP_XML     default 0 (set to 1 to skip XML tests)
 #   SKIP_YARRRML default 1 (need customers_to_person.yarrrml.yml first)
 #
 # Output CSV columns:
@@ -41,7 +41,7 @@ SCRIPTS_DIR="$REPO/evaluation/scripts"
 ITERATIONS=${ITERATIONS:-5}
 BASE_URL=${BASE_URL:-"https://localhost:8443/nifi-api"}
 TOKEN=${NIFI_TOKEN:-""}
-SKIP_XML=${SKIP_XML:-1}
+SKIP_XML=${SKIP_XML:-0}
 SKIP_YARRRML=${SKIP_YARRRML:-1}
 
 BENCH_PG="rml-benchmark"
@@ -72,9 +72,14 @@ get_timeout() {
     case "$1" in
         small_100*) echo "60" ;;
         medium_10k*) echo "120" ;;
+        large_50k*) echo "180" ;;
+        large_100k*) echo "300" ;;
         large_500k*) echo "900" ;;
         xlarge_2m*) echo "2400" ;;
-        invoices_50k*) echo "300" ;;
+        invoices_100*) echo "60" ;;
+        invoices_1k*) echo "90" ;;
+        invoices_5k*) echo "150" ;;
+        invoices_10k*) echo "300" ;;
         *) echo "120" ;;
     esac
 }
@@ -213,12 +218,12 @@ derive_dimensions() {
 # name | input_pattern | mapping_file | output_rdf_format | sizes
 # input_pattern uses %s for the dataset size token (small_100 | medium_10k | ...).
 CASES=(
-  "json_ttl_rml      | %s.json          | customers_to_person.rml.ttl     | TURTLE | small_100 medium_10k large_500k xlarge_2m"
-  "json_jsonld_rml   | %s.json          | customers_to_person.rml.ttl     | JSONLD | small_100 medium_10k large_500k xlarge_2m"
-  "csv_ttl_rml       | %s.csv           | customers_to_person.rml.ttl     | TURTLE | small_100 medium_10k large_500k xlarge_2m"
-  "csv_jsonld_rml    | %s.csv           | customers_to_person.rml.ttl     | JSONLD | small_100 medium_10k large_500k xlarge_2m"
-  "xml_ttl_rml       | invoices_50k.xml | invoices.rml.ttl                | TURTLE | invoices_50k"
-  "json_ttl_yarrrml  | %s.json          | customers_to_person.yarrrml.yml | TURTLE | small_100 medium_10k large_500k xlarge_2m"
+  "json_ttl_rml      | %s.json          | customers_to_person.rml.ttl       | TURTLE | small_100 medium_10k large_50k large_100k large_500k xlarge_2m"
+  "json_jsonld_rml   | %s.json          | customers_to_person.rml.ttl       | JSONLD | small_100 medium_10k large_50k large_100k"
+  "csv_ttl_rml       | %s.csv           | customers_to_person.rml.csv.ttl   | TURTLE | small_100 medium_10k large_50k large_100k large_500k xlarge_2m"
+  "csv_jsonld_rml    | %s.csv           | customers_to_person.rml.csv.ttl   | JSONLD | small_100 medium_10k large_50k large_100k"
+  "xml_ttl_rml       | invoices_%s.xml  | invoices.rml.ttl                  | TURTLE | 100 1k 5k 10k"
+  "json_ttl_yarrrml  | %s.json          | customers_to_person.yarrrml.yml   | TURTLE | small_100 medium_10k large_50k large_100k large_500k xlarge_2m"
 )
 
 #------------------------------------------------------------------------------

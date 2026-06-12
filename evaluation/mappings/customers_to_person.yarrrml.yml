@@ -1,0 +1,19 @@
+prefixes:
+  ex:     "http://example.org/customer/"
+  schema: "https://schema.org/"
+
+sources:
+  customers:
+    access: customers.json
+    referenceFormulation: jsonpath
+    iterator: "$[*]"
+
+mappings:
+  customer:
+    sources: [ customers ]
+    s: ex:$(id)
+    po:
+      - [ a, schema:Person ]
+      - [ schema:identifier, $(id) ]
+      - [ schema:name,       $(name) ]
+      - [ schema:email,      $(email) ]

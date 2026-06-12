@@ -21,9 +21,14 @@ from pathlib import Path
 SIZE_PRESETS = {
     "small_100":     100,
     "medium_10k":    10_000,
+    "large_50k":     50_000,
+    "large_100k":    100_000,
     "large_500k":    500_000,
     "xlarge_2m":     2_000_000,
-    "invoices_50k":  50_000,
+    "invoices_100":  100,
+    "invoices_1k":   1_000,
+    "invoices_5k":   5_000,
+    "invoices_10k":  10_000,
 }
 
 FIRST_NAMES = ["Ivanov", "Petrov", "Sidorov", "Kuznetsov", "Smirnov",

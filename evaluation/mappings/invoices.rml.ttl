@@ -16,7 +16,7 @@
   ] ;
   rr:predicateObjectMap [
     rr:predicate schema:identifier ;
-    rr:objectMap [ rml:reference "@id" ]
+    rr:objectMap [ rml:reference "id" ]
   ] ;
   rr:predicateObjectMap [
     rr:predicate schema:accountId ;
@@ -24,14 +24,14 @@
   ] ;
   rr:predicateObjectMap [
     rr:predicate schema:price ;
-    rr:objectMap [ 
+    rr:objectMap [
       rml:reference "amount" ;
       rr:datatype xsd:decimal
     ]
   ] ;
   rr:predicateObjectMap [
     rr:predicate schema:dateIssued ;
-    rr:objectMap [ 
+    rr:objectMap [
       rml:reference "issued" ;
       rr:datatype xsd:date
     ]

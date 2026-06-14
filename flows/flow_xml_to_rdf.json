@@ -21,7 +21,7 @@
         "mapping-source": "URL",
         "mapping-url": "file:///opt/nifi/mappings/invoices.xml.rml.ttl",
         "input-data-format": "XML",
-        "output-rdf-format": "JSON",
+        "output-rdf-format": "JSONLD",
         "engine-mode": "RMLMAPPER",
         "base-iri": "http://example.org/",
         "temporary-directory": "/tmp/nifi-rml"

@@ -98,14 +98,14 @@ get_timeout() {
     case "$1" in
         small_100*) echo "60" ;;
         medium_10k*) echo "120" ;;
-        large_50k*) echo "180" ;;
-        large_100k*) echo "300" ;;
-        large_500k*) echo "900" ;;
-        xlarge_2m*) echo "2400" ;;
+        large_50k*) echo "150" ;;
+        large_100k*) echo "180" ;;
+        large_500k*) echo "300" ;;
+        xlarge_2m*) echo "600" ;;
         invoices_100*) echo "60" ;;
         invoices_1k*) echo "90" ;;
-        invoices_5k*) echo "150" ;;
-        invoices_10k*) echo "300" ;;
+        invoices_5k*) echo "300" ;;  # Increased from 150s for Python
+        invoices_10k*) echo "600" ;; # Increased from 300s for Python
         *) echo "120" ;;
     esac
 }
@@ -187,6 +187,15 @@ size_token() {
     case "$stem" in
         small_100|medium_10k|large_500k|xlarge_2m) echo "$stem" ;;
         *) echo "$stem" ;;
+    esac
+}
+
+# Check if dataset is XML 5k or 10k (needs special handling for Python)
+is_xml_large() {
+    local input_basename="$1"
+    case "$input_basename" in
+        invoices_5k.xml|invoices_10k.xml) return 0 ;;
+        *) return 1 ;;
     esac
 }
 
@@ -328,11 +337,15 @@ for case_line in "${CASES[@]}"; do
         token=$(size_token "$input_basename")
         timeout_s=$(get_timeout "$token")
 
-        # Always 1 iteration for 2m and 500k datasets (time/memory constraints)
+        # Always 1 iteration for 2m, 500k datasets (time/memory constraints)
+        # Also 1 iteration for XML 5k and 10k in Python mode (slow processing)
         iterations="$ITERATIONS"
         case "$token" in
             xlarge_2m|2m|large_500k|500k) iterations=1 ;;
         esac
+        if [[ "$PROCESSOR_MODE" == "py" ]] && is_xml_large "$input_basename"; then
+            iterations=1
+        fi
 
         for i in $(seq 1 "$iterations"); do
             clean_dirs

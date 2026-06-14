@@ -245,12 +245,11 @@ def chart_speedup(df):
     speedup = pivot["Python (morph-kgc)"] / pivot["Java (RMLMapper)"]
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    bars = ax.bar(labels, speedup, color=[COLORS["java"] if v >= 1 else COLORS["python"] for v in speedup])
+    ax.plot(labels, speedup, color=COLORS["java"], marker="o", linewidth=2, markersize=7)
     ax.axhline(1.0, color="black", linewidth=1, linestyle="--", label="Одинаковая производительность")
-    for bar, val in zip(bars, speedup):
+    for x_pos, (label, val) in enumerate(zip(labels, speedup)):
         if not np.isnan(val):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
-                    f"{val:.1f}×", ha="center", va="bottom", fontsize=9)
+            ax.text(x_pos, val + 0.8, f"{val:.1f}×", ha="center", va="bottom", fontsize=9)
     ax.set_xlabel("Размер датасета (записей)")
     ax.set_ylabel("Время Python / Время Java  (>1 — Java быстрее)")
     ax.set_title("Коэффициент ускорения: время Python ÷ время Java  (JSON→TURTLE, RML)\n>1 означает, что Java быстрее")

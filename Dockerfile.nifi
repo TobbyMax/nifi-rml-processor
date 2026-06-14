@@ -1,0 +1,32 @@
+FROM apache/nifi:2.8.0
+
+USER root
+
+# Increase NiFi JVM heap for Python processor memory usage
+ENV NIFI_JAVA_OPTS="-Xms2g -Xmx4g"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Dedicated venv — NiFi will use its Python as nifi.python.command
+RUN python3 -m venv /opt/nifi/python-venv
+
+# Install morph-kgc into the venv (needed by the Java MorphKGCEngine CLI wrapper)
+# lxml is required for XML/RML mappings with XPath
+RUN /opt/nifi/python-venv/bin/pip install morph-kgc lxml \
+    --trusted-host pypi.org --trusted-host files.pythonhosted.org && \
+    rm -rf /root/.cache/pip
+
+# Wrapper on PATH so `morph-kgc` CLI works for the Java engine subprocess
+RUN printf '#!/opt/nifi/python-venv/bin/python\nimport runpy,sys\nsys.argv=["morph-kgc"]+sys.argv[1:]\nrunpy.run_module("morph_kgc",run_name="__main__")\n' \
+    > /usr/local/bin/morph-kgc && chmod +x /usr/local/bin/morph-kgc
+
+# Deploy the self-contained Python processor.
+# NiFi 2.x loads Python extensions from /opt/nifi/nifi-current/python_extensions by default.
+# We copy directly to this location to ensure the processor is discovered.
+RUN mkdir -p /opt/nifi/nifi-current/python_extensions
+COPY nifi-rml-py/ExecuteRMLMappingPython.py /opt/nifi/nifi-current/python_extensions/
+# Ensure NiFi user can read the processor file
+RUN chown nifi:nifi /opt/nifi/nifi-current/python_extensions/ExecuteRMLMappingPython.py

@@ -3,15 +3,15 @@
 #
 # Pre-requisites:
 #   1. NiFi 2.8.0 is running locally (see flows/scripts/run_nifi.sh).
-#   2. NAR-bundle deployed to NiFi extensions directory.
+#   2. NAR-bundle (java) or Python processor (py) deployed.
 #   3. Datasets are generated: python evaluation/scripts/generate_datasets.py
 #
 # Behaviour:
-#   - Imports flow_benchmark.json (rml-benchmark PG) if missing.
+#   - Imports the benchmark flow (rml-benchmark or rml-benchmark-py PG) if missing.
 #   - Stops every other process group at root so they don't compete for
 #     files dropped into /tmp/nifi-rml-bench.
 #   - For each (case × dataset) combination:
-#       * Patches the ExecuteRMLMappingProcessor properties to match the case.
+#       * Patches processor properties to match the case.
 #       * Copies the input dataset into the watch directory and waits for the
 #         output file to appear in /tmp/nifi-rml-out (end-to-end timer).
 #       * Looks up rml.triples.count / rml.engine.selected for that input via
@@ -23,7 +23,11 @@
 #   BASE_URL     default https://localhost:8443/nifi-api
 #   NIFI_TOKEN   bearer token, empty for unsecured NiFi
 #   SKIP_XML     default 0 (set to 1 to skip XML tests)
-#   SKIP_YARRRML default 1 (need customers_to_person.yarrrml.yml first)
+#   SKIP_YARRRML default 0 (need customers_to_person.yarrrml.yml first)
+#
+# Flags:
+#   --processor java  (default) use Java ExecuteRMLMappingProcessor
+#   --processor py    use Python ExecuteRMLMappingPython
 #
 # Output CSV columns:
 #   case,input_format,output_format,mapping_type,dataset,iteration,
@@ -42,10 +46,32 @@ ITERATIONS=${ITERATIONS:-5}
 BASE_URL=${BASE_URL:-"https://localhost:8443/nifi-api"}
 TOKEN=${NIFI_TOKEN:-""}
 SKIP_XML=${SKIP_XML:-0}
-SKIP_YARRRML=${SKIP_YARRRML:-1}
+SKIP_YARRRML=${SKIP_YARRRML:-0}
 
-BENCH_PG="rml-benchmark"
-BENCH_PROCESSOR="ExecuteRMLMappingProcessor (BENCHMARK)"
+# Parse --processor flag (default: java)
+PROCESSOR_MODE="java"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --processor)
+      PROCESSOR_MODE="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [[ "$PROCESSOR_MODE" == "py" ]]; then
+  BENCH_PG="rml-benchmark-py"
+  BENCH_PROCESSOR="ExecuteRMLMappingPython (BENCHMARK)"
+  BENCH_FLOW="$FLOWS_DIR/flow_benchmark_py.json"
+else
+  BENCH_PG="rml-benchmark"
+  BENCH_PROCESSOR="ExecuteRMLMappingProcessor (BENCHMARK)"
+  BENCH_FLOW="$FLOWS_DIR/flow_benchmark.json"
+fi
+
 BENCH_INPUT_DIR="/tmp/nifi-rml-bench"
 BENCH_OUTPUT_DIR="/tmp/nifi-rml-out"
 
@@ -117,7 +143,7 @@ import_benchmark_flow_if_missing() {
     fi
     python3 "$REPO/flows/scripts/import_blueprint.py" \
         --base-url "$BASE_URL" --token "$TOKEN" \
-        "$FLOWS_DIR/flow_benchmark.json"
+        "$BENCH_FLOW"
 }
 
 solo_benchmark_pg() {
@@ -133,15 +159,24 @@ set_case_properties() {
     local output_rdf_format="$4"   # TURTLE | NTRIPLES | JSONLD | RDFXML
     # Path inside NiFi container (see run_nifi.sh volume mounts)
     local mapping_path="/opt/nifi/mappings/$mapping_file"
-    python3 "$SCRIPTS_DIR/nifi_admin.py" \
-        --base-url "$BASE_URL" --token "$TOKEN" \
-        set-properties "$BENCH_PG" "$BENCH_PROCESSOR" \
-        --prop "mapping-source=FILE" \
-        --prop "mapping-file=$mapping_path" \
-        --prop "mapping-format=$mapping_format" \
-        --prop "input-data-format=$input_data_format" \
-        --prop "output-rdf-format=$output_rdf_format" \
-        --prop "engine-mode=RMLMAPPER"
+    local extra_props=()
+    if [[ "$PROCESSOR_MODE" == "java" ]]; then
+        extra_props=(--prop "engine-mode=RMLMAPPER")
+    fi
+    local cmd=(
+        python3 "$SCRIPTS_DIR/nifi_admin.py"
+        --base-url "$BASE_URL" --token "$TOKEN"
+        set-properties "$BENCH_PG" "$BENCH_PROCESSOR"
+        --prop "mapping-source=FILE"
+        --prop "mapping-file=$mapping_path"
+        --prop "mapping-format=$mapping_format"
+        --prop "input-data-format=$input_data_format"
+        --prop "output-rdf-format=$output_rdf_format"
+    )
+    if [[ ${#extra_props[@]} -gt 0 ]]; then
+        cmd+=("${extra_props[@]}")
+    fi
+    "${cmd[@]}"
 }
 
 # size_token "small_100.json" -> "small_100"; falls back to the bare stem
@@ -232,6 +267,7 @@ CASES=(
 
 mkdir -p "$RESULTS_DIR" "$BENCH_INPUT_DIR" "$BENCH_OUTPUT_DIR"
 
+echo "Processor mode: $PROCESSOR_MODE  (PG: $BENCH_PG)"
 echo "Importing benchmark flow (idempotent)..."
 import_benchmark_flow_if_missing
 
@@ -242,7 +278,9 @@ solo_benchmark_pg
 # the previous run died mid-iteration.
 clean_dirs
 
-RESULTS="$RESULTS_DIR/results.csv"
+# Results file with timestamp and processor mode
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+RESULTS="$RESULTS_DIR/results_${PROCESSOR_MODE}_${TIMESTAMP}.csv"
 echo "case,input_format,output_format,mapping_type,dataset,iteration,duration_ms,triples,engine_selected" > "$RESULTS"
 
 for case_line in "${CASES[@]}"; do
@@ -264,7 +302,20 @@ for case_line in "${CASES[@]}"; do
     echo "[$CASE_NAME] configuring processor (mapping=$MAPPING_FILE, output=$OUTPUT_FORMAT)"
     set_case_properties "$MAPPING_FILE" "$mapping_format" "$input_data_format" "$OUTPUT_FORMAT"
 
+    echo "Waiting 15 seconds for workflow to initialize"
+    sleep 15
+
     for size in $SIZES; do
+        # Skip datasets >100k for Python processor (memory limitations)
+        if [[ "$PROCESSOR_MODE" == "py" ]]; then
+            case "$size" in
+                large_500k|xlarge_2m|2m|500k)
+                    echo "[$CASE_NAME | $size] skipped for Python (size limit 100k)"
+                    continue
+                    ;;
+            esac
+        fi
+
         if [[ "$INPUT_PATTERN" == *"%s"* ]]; then
             input_basename=$(printf "$INPUT_PATTERN" "$size")
         else
@@ -277,7 +328,13 @@ for case_line in "${CASES[@]}"; do
         token=$(size_token "$input_basename")
         timeout_s=$(get_timeout "$token")
 
-        for i in $(seq 1 "$ITERATIONS"); do
+        # Always 1 iteration for 2m and 500k datasets (time/memory constraints)
+        iterations="$ITERATIONS"
+        case "$token" in
+            xlarge_2m|2m|large_500k|500k) iterations=1 ;;
+        esac
+
+        for i in $(seq 1 "$iterations"); do
             clean_dirs
             echo "[$CASE_NAME | $input_basename | iter=$i] waiting (timeout ${timeout_s}s)"
             read -r duration_ms t0_ms < <(run_one_iteration "$input_basename" "$OUTPUT_FORMAT" "$timeout_s" | tr ',' ' ')

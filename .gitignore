@@ -53,8 +53,6 @@ claude_plan_*.md
 evaluation/datasets/*.json
 evaluation/datasets/*.csv
 evaluation/datasets/*.xml
-evaluation/results/*.csv
-evaluation/results/*.json
 
 # Локальные настройки NiFi для отладки (Docker volumes)
 .nifi-runtime/
@@ -62,3 +60,6 @@ evaluation/results/*.json
 
 # Временные файлы движков RML
 /tmp-rml/
+
+# Временные файлы Python
+__pycache__/

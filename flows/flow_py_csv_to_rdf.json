@@ -1,0 +1,46 @@
+{
+  "name": "CSV to RDF (RMLMapper)",
+  "description": "Reads CSV files from a watch directory, applies an inline CSV→RDF mapping, writes Turtle.",
+  "processGroupName": "rml-csv-demo",
+  "processors": [
+    {
+      "id": "get",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile customers.csv",
+      "properties": {
+        "Input Directory": "/tmp/nifi-rml-in",
+        "File Filter": ".*\\.csv",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "ExecuteRMLMappingPython",
+      "name": "ExecuteRMLMappingPython",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-url": "file:///opt/nifi/mappings/customers.csv.rml.ttl",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "CSV",
+        "output-rdf-format": "TURTLE",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure"]
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+  "connections": [
+    { "from": "get", "fromRel": "success", "to": "rml" },
+    { "from": "rml", "fromRel": "success", "to": "put" }
+  ]
+}

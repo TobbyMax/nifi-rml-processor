@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: nifi-rml-py-helpers
+Version: 0.1.0
+Summary: Helper library for ExecuteRMLMappingPython NiFi processor
+Requires-Python: >=3.10
+Requires-Dist: morph-kgc>=2.7
+Requires-Dist: rdflib>=7.0
+Requires-Dist: yatter>=1.2
+Requires-Dist: requests>=2.31
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: pytest-httpserver>=1.0; extra == "dev"
+Requires-Dist: responses>=0.25; extra == "dev"

@@ -1,0 +1,11 @@
+morph-kgc>=2.7
+rdflib>=7.0
+yatter>=1.2
+requests>=2.31
+pyyaml>=6.0
+
+[dev]
+pytest>=8.0
+ruff>=0.4
+pytest-httpserver>=1.0
+responses>=0.25

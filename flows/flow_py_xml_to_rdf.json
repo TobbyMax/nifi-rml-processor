@@ -1,0 +1,45 @@
+{
+  "name": "XML to RDF (RMLMapper)",
+  "description": "Polls XML invoices from a directory, applies XPath-based RML mapping, writes JSON-LD.",
+  "processGroupName": "rml-xml-demo",
+  "processors": [
+    {
+      "id": "get",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile invoices.xml",
+      "properties": {
+        "Input Directory": "/tmp/nifi-rml-in",
+        "File Filter": ".*\\.xml",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "ExecuteRMLMappingPython",
+      "name": "ExecuteRMLMappingPython",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-url": "file:///opt/nifi/mappings/invoices.xml.rml.ttl",
+        "input-data-format": "XML",
+        "output-rdf-format": "JSONLD",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure"]
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+  "connections": [
+    { "from": "get", "fromRel": "success", "to": "rml" },
+    { "from": "rml", "fromRel": "success", "to": "put" }
+  ]
+}

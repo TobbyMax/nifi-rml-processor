@@ -1,0 +1,48 @@
+{
+  "name": "RML benchmark target (Python)",
+  "description": "Benchmark flow for ExecuteRMLMappingPython. GetFile watches /tmp/nifi-rml-bench, ExecuteRMLMappingPython runs morph_kgc.materialize(), PutFile writes to /tmp/nifi-rml-out. Properties marked PLACEHOLDER are overridden per-case by evaluation/scripts/nifi_admin.py set-properties.",
+  "processGroupName": "rml-benchmark-py",
+  "processors": [
+    {
+      "id": "get",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile benchmark/",
+      "properties": {
+        "Input Directory": "/tmp/nifi-rml-bench",
+        "File Filter": ".*",
+        "Keep Source File": "false",
+        "Polling Interval": "0 sec"
+      }
+    },
+    {
+      "id": "rml",
+      "type": "ExecuteRMLMappingPython",
+      "name": "ExecuteRMLMappingPython (BENCHMARK)",
+      "properties": {
+        "mapping-source": "FILE",
+        "mapping-file": "PLACEHOLDER_MAPPING_PATH",
+        "mapping-format": "RML_TTL",
+        "mapping-cache-ttl-seconds": "300",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "base-iri": "http://example.org/",
+        "temporary-directory": "/tmp/nifi-rml-py"
+      },
+      "autoTerminatedRelationships": ["failure"]
+    },
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile benchmark-out/",
+      "properties": {
+        "Directory": "/tmp/nifi-rml-out",
+        "Conflict Resolution Strategy": "replace"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+  "connections": [
+    { "from": "get", "fromRel": "success", "to": "rml" },
+    { "from": "rml", "fromRel": "success", "to": "put" }
+  ]
+}

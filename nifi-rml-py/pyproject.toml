@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nifi-rml-py-helpers"
+version = "0.1.0"
+description = "Helper library for ExecuteRMLMappingPython NiFi processor"
+requires-python = ">=3.10"
+dependencies = [
+    "morph-kgc>=2.7",
+    "rdflib>=7.0",
+    "yatter>=1.2",
+    "requests>=2.31",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nifi_rml_py_helpers*"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "pytest-httpserver>=1.0", "responses>=0.25"]

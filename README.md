@@ -1,9 +1,10 @@
 # nifi-rml-processor
 
 Курсовая работа: **«Реализация новых методов автоматической трансформации данных на платформе Apache NiFi с использованием языка RML и YARRRML»**.
-Направление: **Бизнес-информатика**. Автор: М. Агеев.
 
-## Что это
+Направление: **Бизнес-информатика**.
+
+## Артефакт
 
 Кастомные процессоры **Apache NiFi 2.8.0**, которые нативно исполняют декларативные маппинги [RML](https://rml.io/specs/rml/) и [YARRRML](https://rml.io/yarrrml/spec/) для трансформации **JSON / CSV / XML → RDF** (Turtle / N-Triples / JSON-LD / RDF-XML) внутри потоков данных NiFi.
 
@@ -48,7 +49,7 @@ NAR-файл появится в `nifi-rml-nar/build/libs/`. Для деплоя
 
 Python-процессор подхватывается NiFi 2.x автоматически из директории `nifi-rml-py/` (декларация через `ProcessorDetails.dependencies`, `morph-kgc` и `yatter` ставятся в venv NiFi по первому запуску).
 
-> **Замечание о среде сборки.** Первый прогон `./gradlew build` тянет зависимости (NiFi 2.8.0, Apache Jena 5.2, Jackson, JsonPath, snakeyaml) с Maven Central. Требуется доступ к `repo.maven.apache.org` или к корпоративному mirror. Если сборка не запускалась в текущей машине, вначале вызовите `./gradlew --refresh-dependencies build`.
+> **Замечание о среде сборки.** Первый прогон `./gradlew build` тянет зависимости (NiFi 2.8.0, Apache Jena 5.2, Jackson, JsonPath, snakeyaml) с Maven Central. Требуется доступ к `repo.maven.apache.org`. Если сборка не запускалась в текущей машине, вначале вызовите `./gradlew --refresh-dependencies build`.
 
 ## Требования
 
@@ -96,7 +97,7 @@ python3 flows/scripts/test_prices_mapping.py
 python3 flows/scripts/test_car_mapping.py
 ```
 
-## Бенчмарк
+## Бенчмарки
 
 Сравнение Java-процессора (`ExecuteRMLMappingProcessor`) и Python-процессора (`ExecuteRMLMappingPython`) на общих датасетах JSON/CSV/XML.
 

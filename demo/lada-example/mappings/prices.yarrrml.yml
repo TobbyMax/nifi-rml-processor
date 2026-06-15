@@ -1,0 +1,42 @@
+# Источник: prices.csv — ценовые предложения дилеров
+#
+# Структура: CSV с заголовком
+#   offerId     — идентификатор предложения (O1, O2, …)
+#   vehicleCode — код автомобиля (LadaGranta, LadaVesta, …)
+#   priceEUR    — цена в евро
+#   dealer      — наименование дилера
+#
+# Результат: schema:Offer, связанные с экземплярами из engineer.yarrrml.yml
+#
+# Ключ связи с car.yarrrml.yml и engineer.yarrrml.yml:
+#   schema:itemOffered → ex:vehicle/<vehicleCode>
+#   vehicleCode (LadaGranta, …) совпадает во всех трёх источниках ✓
+
+prefixes:
+  ex:     "http://example.org/lada/"
+  owl:    "http://www.w3.org/2002/07/owl#"
+  rdfs:   "http://www.w3.org/2000/01/rdf-schema#"
+  schema: "https://schema.org/"
+  xsd:    "http://www.w3.org/2001/XMLSchema#"
+
+sources:
+  offers:
+    access: input.csv
+    referenceFormulation: csv
+
+mappings:
+
+  vehicle-offer:
+    sources: [ offers ]
+    s: ex:offer/$(offerId)
+    po:
+      - [ a, schema:Offer ]
+      - [ schema:identifier, $(offerId) ]
+      - p: schema:price
+        o:
+          - value: $(priceEUR)
+            datatype: xsd:decimal
+      - [ schema:priceCurrency, "EUR" ]
+      - [ schema:seller, $(dealer) ]
+      # Ссылка на экземпляр автомобиля (из engineer.yarrrml.yml)
+      - [ schema:itemOffered, ex:vehicle/$(vehicleCode) ]

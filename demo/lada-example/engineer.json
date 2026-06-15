@@ -1,0 +1,30 @@
+[
+  {
+    "vehicleCode": "LadaGranta",
+    "model": "Lada Granta",
+    "doorCount": 4,
+    "enginePowerHP": 90,
+    "maxSpeedKmh": 167
+  },
+  {
+    "vehicleCode": "LadaVesta",
+    "model": "Lada Vesta",
+    "doorCount": 4,
+    "enginePowerHP": 106,
+    "maxSpeedKmh": 182
+  },
+  {
+    "vehicleCode": "LadaXRay",
+    "model": "Lada XRay",
+    "doorCount": 5,
+    "enginePowerHP": 122,
+    "maxSpeedKmh": 186
+  },
+  {
+    "vehicleCode": "LadaKalina",
+    "model": "Lada Kalina",
+    "doorCount": 5,
+    "enginePowerHP": 98,
+    "maxSpeedKmh": 175
+  }
+]

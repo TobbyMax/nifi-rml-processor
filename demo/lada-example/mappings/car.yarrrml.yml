@@ -1,0 +1,62 @@
+# Источник: car.xmi — UML/SysML модель каталога автомобилей Lada
+#
+# Структура файла:
+#   packagedElement[@xmi:type='uml:Class']  — описание класса (Vehicle, LadaGranta, …)
+#     generalization[@general]              — ссылка (xmi:id) на родительский класс
+#
+# Результат: 
+#   - Vehicle как owl:Class
+#   - LadaGranta, LadaVesta, LadaXRay, LadaKalina как экземпляры Vehicle (не подклассы!)
+#
+# Субъект: ex:vehicle/<@name>  (напр. ex:vehicle/LadaGranta)
+# Ключ связи с engineer.yarrrml.yml и prices.yarrrml.yml: vehicleCode == @name
+#
+# Примечание: для атрибута xmi:id используется полный URI в условии джойна
+
+prefixes:
+  ex:   "http://example.org/lada/"
+  owl:  "http://www.w3.org/2002/07/owl#"
+  rdfs: "http://www.w3.org/2000/01/rdf-schema#"
+  schema: "https://schema.org/"
+
+sources:
+  all-classes:
+    access: input.xml
+    referenceFormulation: xpath
+    iterator: ".//packagedElement[@xmi:type='uml:Class']"
+    namespaces:
+      xmi: "http://www.omg.org/XMI"
+
+  root-class:
+    access: input.xml
+    referenceFormulation: xpath
+    # Только корневой класс Vehicle (без generalization)
+    iterator: ".//packagedElement[@xmi:type='uml:Class' and not(generalization)]"
+    namespaces:
+      xmi: "http://www.omg.org/XMI"
+
+  derived-classes:
+    access: input.xml
+    referenceFormulation: xpath
+    # только классы с явным родителем
+    iterator: ".//packagedElement[@xmi:type='uml:Class' and generalization]"
+    namespaces:
+      xmi: "http://www.omg.org/XMI"
+
+mappings:
+
+  # Корневой класс Vehicle как owl:Class
+  vehicle-class:
+    sources: [ root-class ]
+    s: ex:vehicle/$(@name)
+    po:
+      - [ a, owl:Class ]
+      - [ rdfs:label, $(@name) ]
+
+  # Производные классы (LadaGranta и т.д.) как экземпляры Vehicle
+  vehicle-instance:
+    sources: [ derived-classes ]
+    s: ex:vehicle/$(@name)
+    po:
+      - [ a, ex:Vehicle ]
+      - [ schema:name, $(@name) ]

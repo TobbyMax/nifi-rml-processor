@@ -15,7 +15,8 @@ RUN python3 -m venv /opt/nifi/python-venv
 
 # Install morph-kgc into the venv (needed by the Java MorphKGCEngine CLI wrapper)
 # lxml is required for XML/RML mappings with XPath
-RUN /opt/nifi/python-venv/bin/pip install morph-kgc lxml \
+# yatter is required for YARRRML to RML transpilation in the Python processor
+RUN /opt/nifi/python-venv/bin/pip install morph-kgc lxml yatter \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org && \
     rm -rf /root/.cache/pip
 

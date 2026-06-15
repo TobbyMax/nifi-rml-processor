@@ -1,0 +1,126 @@
+{
+  "name": "Lada multi-source → merged Turtle",
+  "description": "Три параллельных ветки: XML (car.xmi) + JSON (engineer.json) + CSV (prices.csv) → каждая через ExecuteRMLMappingProcessor (Java, YARRRML) → Turtle → MergeContent (конкатенация) → единый .ttl-файл. Маппинги: demo/lada-example/mappings/.",
+  "processGroupName": "lada-multi-source-demo",
+  "processors": [
+
+    {
+      "id": "get-xml",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile car.xmi",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.xmi",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-xml",
+      "type": "ExecuteRMLMappingPython",
+      "name": "RML car.xmi → OWL-классы",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/car.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "XML",
+        "output-rdf-format": "TURTLE",
+        "base-iri": "http://sysml-example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+    {
+      "id": "get-json",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile engineer.json",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.json",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-json",
+      "type": "ExecuteRMLMappingPython",
+      "name": "RML engineer.json → schema:Car",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/engineer.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "base-iri": "http://json-example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+
+    {
+      "id": "get-csv",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile prices.csv",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.csv",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-csv",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "RML prices.csv → schema:Offer",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/prices.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "CSV",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "base-iri": "http://csv-example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+
+    {
+      "id": "merge",
+      "type": "org.apache.nifi.processors.standard.MergeContent",
+      "name": "MergeContent — объединить 3 Turtle",
+      "properties": {
+        "Merge Strategy": "Bin-Packing Algorithm",
+        "Merge Format": "Binary Concatenation",
+        "Minimum Number of Entries": "3",
+        "Maximum Number of Entries": "3",
+        "Max Bin Age": "10 sec",
+        "Delimiter Strategy": "Text",
+        "Demarcator": "\n"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+
+    {
+      "id": "put",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile lada-merged.ttl",
+      "properties": {
+        "Directory": "/tmp/nifi-lada-out",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+
+  "connections": [
+    { "from": "get-xml",  "fromRel": "success", "to": "rml-xml"  },
+    { "from": "get-json", "fromRel": "success", "to": "rml-json" },
+    { "from": "get-csv",  "fromRel": "success", "to": "rml-csv"  },
+    { "from": "rml-xml",  "fromRel": "success", "to": "merge"    },
+    { "from": "rml-json", "fromRel": "success", "to": "merge"    },
+    { "from": "rml-csv",  "fromRel": "success", "to": "merge"    },
+    { "from": "merge",    "fromRel": "merged",  "to": "put"      }
+  ]
+}

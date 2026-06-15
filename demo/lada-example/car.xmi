@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xmi:XMI
+    xmi:version="2.4"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:uml="http://www.omg.org/spec/UML/20131001"
+    xmlns:sysml="http://www.omg.org/spec/SysML/20150709/SysML">
+
+  <uml:Model
+      xmi:id="MODEL_1"
+      name="VehicleCatalog">
+
+    <!-- Primitive Types -->
+
+    <packagedElement
+        xmi:type="uml:PrimitiveType"
+        xmi:id="TYPE_INTEGER"
+        name="Integer"/>
+
+    <!-- Base Vehicle -->
+
+    <packagedElement
+        xmi:type="uml:Class"
+        xmi:id="VEHICLE"
+        name="Vehicle">
+
+      <ownedAttribute
+          xmi:id="PROP_DOORS"
+          name="doorCount"
+          visibility="public">
+
+        <type xmi:idref="TYPE_INTEGER"/>
+
+      </ownedAttribute>
+
+    </packagedElement>
+
+    <!-- Lada Granta -->
+
+    <packagedElement
+        xmi:type="uml:Class"
+        xmi:id="GRANTA"
+        name="LadaGranta">
+
+      <generalization
+          xmi:id="GEN_GRANTA"
+          general="VEHICLE"/>
+
+    </packagedElement>
+
+    <!-- Lada Vesta -->
+
+    <packagedElement
+        xmi:type="uml:Class"
+        xmi:id="VESTA"
+        name="LadaVesta">
+
+      <generalization
+          xmi:id="GEN_VESTA"
+          general="VEHICLE"/>
+
+    </packagedElement>
+
+    <!-- Lada XRay -->
+
+    <packagedElement
+        xmi:type="uml:Class"
+        xmi:id="XRAY"
+        name="LadaXRay">
+
+      <generalization
+          xmi:id="GEN_XRAY"
+          general="VEHICLE"/>
+
+    </packagedElement>
+
+    <!-- Lada Kalina -->
+
+    <packagedElement
+        xmi:type="uml:Class"
+        xmi:id="KALINA"
+        name="LadaKalina">
+
+      <generalization
+          xmi:id="GEN_KALINA"
+          general="VEHICLE"/>
+
+    </packagedElement>
+
+  </uml:Model>
+
+  <!-- SysML Blocks -->
+
+  <sysml:Block
+      xmi:id="BLOCK_VEHICLE"
+      base_Class="VEHICLE"/>
+
+  <sysml:Block
+      xmi:id="BLOCK_GRANTA"
+      base_Class="GRANTA"/>
+
+  <sysml:Block
+      xmi:id="BLOCK_VESTA"
+      base_Class="VESTA"/>
+
+  <sysml:Block
+      xmi:id="BLOCK_XRAY"
+      base_Class="XRAY"/>
+
+  <sysml:Block
+      xmi:id="BLOCK_KALINA"
+      base_Class="KALINA"/>
+
+</xmi:XMI>

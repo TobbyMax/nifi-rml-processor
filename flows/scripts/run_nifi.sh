@@ -3,6 +3,8 @@
 #
 # Usage:
 #   flows/scripts/run_nifi.sh start             # start container (custom image with morph-kgc + Python processor)
+#   flows/scripts/run_nifi.sh start_for_bench   # start with evaluation/mappings + evaluation/datasets
+#   flows/scripts/run_nifi.sh start_car_demo    # start with lada-example data; copies demo/lada-example/mappings/ → /opt/nifi/mappings/lada/
 #   flows/scripts/run_nifi.sh stop              # stop and remove
 #   flows/scripts/run_nifi.sh deploy            # copy NAR-bundle into the running container
 #   flows/scripts/run_nifi.sh deploy_py         # hot-deploy Python processor (no rebuild needed)
@@ -40,7 +42,7 @@ case "${1:-start}" in
       -v "/tmp/nifi-rml-bench:/tmp/nifi-rml-bench" \
       -v "/tmp/nifi-rml-out:/tmp/nifi-rml-out" \
       "$CUSTOM_IMAGE"
-    echo "NiFi starting at http://localhost:8080/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
+    echo "NiFi starting at https://localhost:8443/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
     echo "Watch dir: /tmp/nifi-rml-bench"
     echo "Output:    /tmp/nifi-rml-out"
     ;;
@@ -63,11 +65,39 @@ case "${1:-start}" in
       -v "/tmp/nifi-rml-bench:/tmp/nifi-rml-bench" \
       -v "/tmp/nifi-rml-out:/tmp/nifi-rml-out" \
       "$CUSTOM_IMAGE"
-    echo "NiFi starting at http://localhost:8080/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
+    echo "NiFi starting at https://localhost:8443/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
     echo "Mappings:  /opt/nifi/mappings (from evaluation/mappings)"
     echo "Datasets:  /opt/nifi/datasets (from evaluation/datasets)"
     echo "Watch dir: /tmp/nifi-rml-bench"
     echo "Output:    /tmp/nifi-rml-out"
+    ;;
+
+  start_car_demo)
+    if ! docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
+      echo "Custom image not found; building..."
+      docker build -t "$CUSTOM_IMAGE" -f "$REPO/Dockerfile.nifi" "$REPO"
+    fi
+    mkdir -p /tmp/nifi-lada-in /tmp/nifi-lada-out
+    cp "$REPO/demo/lada-example/car.xmi"       /tmp/nifi-lada-in/
+    cp "$REPO/demo/lada-example/engineer.json" /tmp/nifi-lada-in/
+    cp "$REPO/demo/lada-example/prices.csv"    /tmp/nifi-lada-in/
+    docker run -d --name "$CONTAINER" \
+      -p 8080:8080 -p 8443:8443 \
+      -e NIFI_WEB_HTTP_PORT=8080 \
+      -e SINGLE_USER_CREDENTIALS_USERNAME=admin \
+      -e SINGLE_USER_CREDENTIALS_PASSWORD=ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB \
+      -e NIFI_PYTHON_COMMAND=/opt/nifi/python-venv/bin/python \
+      -v "$REPO/nifi-rml-nar/build/libs:/opt/nifi/nifi-current/nar_extensions" \
+      -v "/tmp/nifi-lada-in:/tmp/nifi-lada-in" \
+      -v "/tmp/nifi-lada-out:/tmp/nifi-lada-out" \
+      "$CUSTOM_IMAGE"
+    docker exec "$CONTAINER" mkdir -p /opt/nifi/mappings/lada
+    docker cp "$REPO/demo/lada-example/mappings/." "$CONTAINER":/opt/nifi/mappings/lada/
+    echo "NiFi starting at https://localhost:8443/nifi (admin / ctsBtRBKHRAx69EqUghvvgEvjnaLjFEB)"
+    echo "Mappings:  /opt/nifi/mappings/lada/ (docker cp из demo/lada-example/mappings/)"
+    echo "Input:     /tmp/nifi-lada-in (car.xmi + engineer.json + prices.csv)"
+    echo "Output:    /tmp/nifi-lada-out"
+    echo "Flow:      flows/flow_lada_multi_source.json"
     ;;
 
   stop)

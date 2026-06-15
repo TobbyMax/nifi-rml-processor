@@ -1,0 +1,50 @@
+# Источник: engineer.json — технические характеристики автомобилей
+#
+# Структура: массив объектов
+#   vehicleCode   — ключ ("LadaGranta", "LadaVesta", …) — совпадает с @name из car.xmi
+#   model         — маркетинговое название
+#   doorCount     — количество дверей
+#   enginePowerHP — мощность двигателя (л.с.)
+#   maxSpeedKmh   — максимальная скорость (км/ч)
+#
+# Субъект: ex:vehicle/<vehicleCode> — тот же IRI, что в car.yarrrml.yml и prices.yarrrml.yml
+#
+# Этот маппинг дополняет car.yarrrml.yml: вместе они дают полную OWL-модель
+
+prefixes:
+  ex:     "http://example.org/lada/"
+  owl:    "http://www.w3.org/2002/07/owl#"
+  rdfs:   "http://www.w3.org/2000/01/rdf-schema#"
+  schema: "https://schema.org/"
+  xsd:    "http://www.w3.org/2001/XMLSchema#"
+
+sources:
+  specs:
+    access: input.json
+    referenceFormulation: jsonpath
+    iterator: "$[*]"
+
+mappings:
+
+  # Инженерные характеристики — свойства экземпляров автомобилей
+  vehicle-spec:
+    sources: [ specs ]
+    s: ex:vehicle/$(vehicleCode)
+    po:
+      # Экземпляр класса Vehicle
+      - [ a, ex:Vehicle ]
+      # Маркетинговое название
+      - [ schema:name, $(model) ]
+      # Технические характеристики
+      - p: schema:numberOfDoors
+        o:
+          - value: $(doorCount)
+            datatype: xsd:integer
+      - p: ex:enginePowerHP
+        o:
+          - value: $(enginePowerHP)
+            datatype: xsd:integer
+      - p: ex:maxSpeedKmh
+        o:
+          - value: $(maxSpeedKmh)
+            datatype: xsd:integer

@@ -1,0 +1,132 @@
+{
+  "name": "Lada separate Turtle outputs",
+  "description": "Три параллельных ветки: XML (car.xmi) + JSON (engineer.json) + CSV (prices.csv) → каждая через ExecuteRMLMappingProcessor (Java, YARRRML) → Turtle → отдельный PutFile. Маппинги: demo/lada-example/mappings/.",
+  "processGroupName": "lada-separate-demo",
+  "processors": [
+
+    {
+      "id": "get-xml",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile car.xmi",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.xmi",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-xml",
+      "type": "ExecuteRMLMappingPython",
+      "name": "RML car.xmi → OWL-классы",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/car.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "XML",
+        "output-rdf-format": "TURTLE",
+        "base-iri": "http://example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+    {
+      "id": "put-xml",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile car.ttl",
+      "properties": {
+        "Directory": "/tmp/nifi-lada-out",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    },
+
+    {
+      "id": "get-json",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile engineer.json",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.json",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-json",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "RML engineer.json → schema:Car",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/engineer.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "JSON",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "base-iri": "http://example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+    {
+      "id": "put-json",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile engineer.ttl",
+      "properties": {
+        "Directory": "/tmp/nifi-lada-out",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    },
+
+    {
+      "id": "get-csv",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "GetFile prices.csv",
+      "properties": {
+        "Input Directory": "/tmp/nifi-lada-in",
+        "File Filter": ".*\\.csv",
+        "Keep Source File": "true"
+      }
+    },
+    {
+      "id": "rml-csv",
+      "type": "com.agreev.nifi.rml.ExecuteRMLMappingProcessor",
+      "name": "RML prices.csv → schema:Offer",
+      "properties": {
+        "mapping-source": "URL",
+        "mapping-format": "YARRRML",
+        "mapping-url": "file:///opt/nifi/mappings/lada/prices.yarrrml.yml",
+        "mapping-cache-ttl-seconds": "600",
+        "input-data-format": "CSV",
+        "output-rdf-format": "TURTLE",
+        "engine-mode": "RMLMAPPER",
+        "base-iri": "http://example.org/lada/",
+        "temporary-directory": "/tmp/nifi-rml"
+      },
+      "autoTerminatedRelationships": ["failure", "original"]
+    },
+    {
+      "id": "put-csv",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "PutFile prices.ttl",
+      "properties": {
+        "Directory": "/tmp/nifi-lada-out",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "autoTerminatedRelationships": ["failure", "success"]
+    }
+  ],
+
+  "connections": [
+    { "from": "get-xml",  "fromRel": "success", "to": "rml-xml"  },
+    { "from": "rml-xml",  "fromRel": "success", "to": "put-xml"  },
+    { "from": "get-json", "fromRel": "success", "to": "rml-json" },
+    { "from": "rml-json", "fromRel": "success", "to": "put-json" },
+    { "from": "get-csv",  "fromRel": "success", "to": "rml-csv"  },
+    { "from": "rml-csv",  "fromRel": "success", "to": "put-csv"  }
+  ]
+}

@@ -1,0 +1,15 @@
+PREFIX lada: <http://example.org/lada/>
+PREFIX schema: <http://schema.org/>
+
+SELECT ?model ?horsepower ?price
+WHERE {
+  ?offer a schema:Offer ;
+         schema:itemOffered ?vehicle ;
+         schema:price ?price .
+  
+  ?vehicle a lada:Vehicle ;
+           schema:name ?model ;
+           lada:enginePowerHP ?horsepower .
+  
+  FILTER(?horsepower > 100)
+}

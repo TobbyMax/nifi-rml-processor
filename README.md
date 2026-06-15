@@ -7,21 +7,23 @@
 
 Кастомные процессоры **Apache NiFi 2.8.0**, которые нативно исполняют декларативные маппинги [RML](https://rml.io/specs/rml/) и [YARRRML](https://rml.io/yarrrml/spec/) для трансформации **JSON / CSV / XML → RDF** (Turtle / N-Triples / JSON-LD / RDF-XML) внутри потоков данных NiFi.
 
+Репозиторий содержит **две независимые реализации** одного и того же процессора:
+
+- **Java** — `ExecuteRMLMappingProcessor` (модуль `nifi-rml-processors/`) поверх Apache Jena: in-process исполнение, потоковая обработка (Jackson streaming для JSON, ленивый итератор для CSV, StAX-style XPath для XML), эмиссия триплетов через `Jena StreamRDF` без построения полного in-memory графа.
+- **Python** — `ExecuteRMLMappingPython` (модуль `nifi-rml-py/`), NiFi 2.x `FlowFileTransform`, вызывает `morph_kgc.materialize()` напрямую (без subprocess-обвязки) и `yatter` для транспиляции YARRRML→RML.
+
+Обе реализации запускаются в одном инстансе NiFi и сравниваются на общих датасетах — см. раздел «Бенчмарк».
+
 Ключевые возможности:
 
-- **Гибридный движок** с тремя режимами выбора:
-  - `RMLMAPPER` — in-process Java-движок (поверх Apache Jena);
-  - `MORPH_KGC` — внешний Python-движок через `ProcessBuilder`;
-  - `AUTO` — выбор по размеру FlowFile (default 50 МБ, настраивается).
-- **Потоковый режим**: записи читаются лениво (Jackson streaming для JSON, ленивый итератор для CSV, StAX-style XPath для XML), триплеты эмитируются через `Jena StreamRDF` без построения in-memory графа. Pиковая память ограничена размером одной записи, не всего FlowFile.
 - **Несколько источников маппинга** (`mapping-source`):
   - `INLINE` — текст в свойстве процессора;
   - `FILE` — путь к файлу на диске NiFi-узла;
   - `ATTRIBUTE` — FlowFile-атрибут;
   - `URL` — HTTP(S) / `file://` / `classpath:` URI с TTL-кешем; работает с raw-endpoint'ами GitHub/GitLab, S3, внутренними mapping-репозиториями.
 - **Параметризация**: NiFi Expression Language применяется к маппингам и URL — `${tenant.id}`, `${dataset}`, `${region}` подставляются из FlowFile-атрибутов.
-- **YARRRML**: встроенная транспиляция YARRRML→RML через свойство `mapping-format` в `ExecuteRMLMappingProcessor` (базовое подмножество спецификации, Java-парсер).
-- **Provenance**: на каждый FlowFile пишутся атрибуты `rml.engine.selected`, `rml.engine.reason`, `rml.triples.count`, `rml.duration.ms`, `rml.input.size.bytes`, `mime.type`, `rml.error.*`.
+- **YARRRML**: встроенная транспиляция YARRRML→RML через свойство `mapping-format` (Java — собственный парсер базового подмножества; Python — `yatter`).
+- **Provenance**: на каждый FlowFile пишутся атрибуты `rml.engine.selected`, `rml.triples.count`, `rml.duration.ms`, `rml.input.size.bytes`, `mime.type`, `rml.error.*`. В CSV бенчмарка `rml.engine.selected=RMLMAPPER` соответствует Java-движку, `MORPH_KGC_PY` — Python.
 
 ## Состав репозитория
 
@@ -29,22 +31,22 @@
 |---|---|
 | `nifi-rml-processors/` | Java-модуль с процессорами, engine layer, YARRRML-парсером |
 | `nifi-rml-nar/` | Сборочный модуль NAR-bundle для деплоя в NiFi |
-| `flows/` | 5 готовых blueprint-описаний DataFlow (этап 7) + скрипты импорта/валидации |
-| `evaluation/` | Методика и инфраструктура бенчмарков (этап 8) |
-| `demo/` | E2E демо-стенд: docker-compose + bootstrap (Greenplum→NiFi→Fuseki+Neo4j+Superset) |
-| `docs/` | Теоретические главы, архитектура, методики, экономика, библиография — **не в git** (см. ниже) |
-| `docs/examples/` | Примеры RML/YARRRML маппингов и тестовые данные |
-| `PLAN.md` | Согласованный исследовательский план (источник истины) |
+| `nifi-rml-py/` | Python-процессор `ExecuteRMLMappingPython` + helper-пакет для venv NiFi |
+| `flows/` | Готовые blueprint-описания DataFlow (Java и Python варианты) + скрипты импорта/валидации |
+| `evaluation/` | Методика и инфраструктура бенчмарков |
+| `demo/lada-example/` | Демо-пример: JSON+CSV+XML источники модели «АвтоВАЗ» (инженер/прайс/конфигурация автомобиля) и YARRRML-маппинги |
 
 ## Сборка
 
 ```bash
 ./gradlew build              # компиляция + тесты
 ./gradlew test               # только unit-тесты
-./gradlew :nifi-rml-nar:nar  # сборка NAR-bundle
+./gradlew :nifi-rml-nar:nar  # сборка NAR-bundle (Java-процессор)
 ```
 
 NAR-файл появится в `nifi-rml-nar/build/libs/`. Для деплоя — скопировать в `$NIFI_HOME/extensions/` и перезапустить NiFi (или использовать `flows/scripts/run_nifi.sh deploy`).
+
+Python-процессор подхватывается NiFi 2.x автоматически из директории `nifi-rml-py/` (декларация через `ProcessorDetails.dependencies`, `morph-kgc` и `yatter` ставятся в venv NiFi по первому запуску).
 
 > **Замечание о среде сборки.** Первый прогон `./gradlew build` тянет зависимости (NiFi 2.8.0, Apache Jena 5.2, Jackson, JsonPath, snakeyaml) с Maven Central. Требуется доступ к `repo.maven.apache.org` или к корпоративному mirror. Если сборка не запускалась в текущей машине, вначале вызовите `./gradlew --refresh-dependencies build`.
 
@@ -52,7 +54,7 @@ NAR-файл появится в `nifi-rml-nar/build/libs/`. Для деплоя
 
 - **Java 21+** (требование Apache NiFi 2.x).
 - **Gradle 8+** (поставляется через `./gradlew`).
-- Для режима `MORPH_KGC` дополнительно: **Python ≥ 3.9** и `pip install morph-kgc` на NiFi-хосте.
+- Для Python-процессора: **Python ≥ 3.9**; пакеты `morph-kgc` и `yatter` (объявлены в `ProcessorDetails.dependencies`, ставятся автоматически).
 - Для скриптов NAR-деплоя в `flows/scripts/`: **Docker** + `python3 -m pip install requests`.
 
 ## Запуск тестового потока
@@ -69,32 +71,51 @@ python3 flows/scripts/import_blueprint.py \
 # Открыть http://localhost:8080/nifi, найти ProcessGroup `rml-json-demo`, запустить.
 ```
 
-## End-to-End демо-стенд
+Аналогичные blueprint'ы для Python-процессора — `flows/flow_py_json_to_rdf.json`, `flow_py_csv_to_rdf.json`, `flow_py_xml_to_rdf.json`.
 
-Полный pipeline для защиты ВКР — `Greenplum → NiFi+RML → (RDF Fuseki + Neo4j + Superset)` — описан в `docs/10_e2e_demo_architecture.md` и поднимается одной командой:
+## Демо «АвтоВАЗ» (lada-example)
+
+Учебный кейс трансформации разнородных источников одной предметной области в единый RDF-граф:
+
+| Источник | Формат | Описание |
+|---|---|---|
+| `demo/lada-example/engineer.json` | JSON | Карточки инженеров КБ |
+| `demo/lada-example/prices.csv` | CSV | Прайс-лист комплектаций |
+| `demo/lada-example/car.xmi` | XML (XMI) | UML/MOF-модель конфигурации автомобиля |
+
+Маппинги в `demo/lada-example/mappings/*.yarrrml.yml`. В `flows/` лежат два blueprint-варианта:
+
+- `flow_lada_separate.json` — три параллельных подпотока (по одному на источник);
+- `flow_lada_multi_source.json` — единый поток с маршрутизацией по `mime.type`.
+
+Локальная проверка маппинга без NiFi (через `morph-kgc` напрямую):
 
 ```bash
-./gradlew :nifi-rml-nar:nar
-docker compose -f docker-compose.demo.yml up -d
-bash demo/bootstrap.sh
+python3 flows/scripts/test_engineer_mapping.py
+python3 flows/scripts/test_prices_mapping.py
+python3 flows/scripts/test_car_mapping.py
 ```
-
-Подробнее: [`demo/README.md`](demo/README.md).
 
 ## Бенчмарк
 
+Сравнение Java-процессора (`ExecuteRMLMappingProcessor`) и Python-процессора (`ExecuteRMLMappingPython`) на общих датасетах JSON/CSV/XML.
+
 ```bash
 python evaluation/scripts/generate_datasets.py
-ITERATIONS=5 NIFI_TOKEN="$TOKEN" bash evaluation/scripts/run_benchmarks.sh
+
+# Java-процессор
+ITERATIONS=5 NIFI_TOKEN="$TOKEN" \
+  bash evaluation/scripts/run_benchmarks.sh --processor java
+
+# Python-процессор
+ITERATIONS=5 NIFI_TOKEN="$TOKEN" \
+  bash evaluation/scripts/run_benchmarks.sh --processor py
+
 # Результаты: evaluation/results/results.csv
+# Колонка engine_selected: RMLMAPPER (Java) vs MORPH_KGC_PY (Python).
 ```
 
-Подробнее в `evaluation/benchmark.md` и `docs/06_evaluation_methodology.md`.
-
-## Ветки git
-
-- **`master`** — финальная версия с поддержкой JSON+CSV+XML, обоих движков (включая AUTO), URL-источника маппингов, потокового режима и YARRRML (через `mapping-format` в основном процессоре).
-- **`json-only-parser`** (тег `json-only-parser-complete`) — снимок после этапа 5: JSON-only процессор с обоими движками, без CSV/XML/YARRRML/URL/streaming. Сохранён для иллюстрации фазового подхода в главе 3 ВКР.
+Поток для Java — `flows/flow_benchmark.json` (PG `rml-benchmark`), для Python — `flows/flow_benchmark_py.json` (PG `rml-benchmark-py`). 
 
 ## Лицензия
 

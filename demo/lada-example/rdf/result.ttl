@@ -1,0 +1,76 @@
+<http://example.org/lada/offer/O1>
+        a                            <https://schema.org/Offer>;
+        <https://schema.org/itemOffered>  <http://example.org/lada/vehicle/LadaGranta>;
+        <https://schema.org/seller>  "AutoMarket";
+        <https://schema.org/priceCurrency>  "EUR";
+        <https://schema.org/identifier>  "O1" .
+
+<http://example.org/lada/offer/O2>
+        a                            <https://schema.org/Offer>;
+        <https://schema.org/itemOffered>  <http://example.org/lada/vehicle/LadaVesta>;
+        <https://schema.org/seller>  "AutoMarket";
+        <https://schema.org/priceCurrency>  "EUR";
+        <https://schema.org/identifier>  "O2" .
+
+<http://example.org/lada/offer/O3>
+        a                            <https://schema.org/Offer>;
+        <https://schema.org/itemOffered>  <http://example.org/lada/vehicle/LadaXRay>;
+        <https://schema.org/seller>  "VolgaCars";
+        <https://schema.org/priceCurrency>  "EUR";
+        <https://schema.org/identifier>  "O3" .
+
+<http://example.org/lada/offer/O4>
+        a                            <https://schema.org/Offer>;
+        <https://schema.org/itemOffered>  <http://example.org/lada/vehicle/LadaKalina>;
+        <https://schema.org/seller>  "UsedCarsRU";
+        <https://schema.org/priceCurrency>  "EUR";
+        <https://schema.org/identifier>  "O4" .
+
+@prefix ns1: <http://schema.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/lada/vehicle/LadaGranta> a <http://example.org/lada/Vehicle> ;
+    ns1:name "LadaGranta" .
+
+<http://example.org/lada/vehicle/LadaKalina> a <http://example.org/lada/Vehicle> ;
+    ns1:name "LadaKalina" .
+
+<http://example.org/lada/vehicle/LadaVesta> a <http://example.org/lada/Vehicle> ;
+    ns1:name "LadaVesta" .
+
+<http://example.org/lada/vehicle/LadaXRay> a <http://example.org/lada/Vehicle> ;
+    ns1:name "LadaXRay" .
+
+<http://example.org/lada/vehicle/Vehicle> a owl:Class ;
+    rdfs:label "Vehicle" .
+
+
+@prefix ns1: <http://schema.org/> .
+@prefix ns2: <http://example.org/lada/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/lada/vehicle/LadaGranta> a ns2:Vehicle ;
+    ns2:enginePowerHP 90 ;
+    ns2:maxSpeedKmh 167 ;
+    ns1:name "Lada Granta" ;
+    ns1:numberOfDoors 4 .
+
+<http://example.org/lada/vehicle/LadaKalina> a ns2:Vehicle ;
+    ns2:enginePowerHP 98 ;
+    ns2:maxSpeedKmh 175 ;
+    ns1:name "Lada Kalina" ;
+    ns1:numberOfDoors 5 .
+
+<http://example.org/lada/vehicle/LadaVesta> a ns2:Vehicle ;
+    ns2:enginePowerHP 106 ;
+    ns2:maxSpeedKmh 182 ;
+    ns1:name "Lada Vesta" ;
+    ns1:numberOfDoors 4 .
+
+<http://example.org/lada/vehicle/LadaXRay> a ns2:Vehicle ;
+    ns2:enginePowerHP 122 ;
+    ns2:maxSpeedKmh 186 ;
+    ns1:name "Lada XRay" ;
+    ns1:numberOfDoors 5 .
+
